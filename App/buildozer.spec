@@ -16,7 +16,7 @@ source.dir = .
 source.include_exts = py,png,jpg,ttf
 
 # (list) List of inclusions using pattern matching
-source.include_patterns = imagenes/*.png,fuentes/*.ttf
+source.include_patterns = img/*.png,fonts/*.ttf
 
 # (list) Source files to exclude (let empty to not exclude anything)
 # source.exclude_exts = spec
@@ -31,7 +31,7 @@ version = 0.1
 requirements = python3,kivy,random
 
 # (str) Icon of the application
-#icon.filename = %(source.dir)s/data/icon.png
+#icon.filename = %(source.dir)s/logo.png
 
 # (list) Supported orientations
 orientation = portrait
