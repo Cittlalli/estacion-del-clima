@@ -61,10 +61,10 @@ class Fondo(Widget):
 class ClimaApp(App):
     def build(self):
         self.condicion_actual = "normal_dia"
-        self.ruta_imagenes = r"C:\\Users\\metis_17gpyox\\Desktop\\Proyecto Estacion del Clima\\imagenes"
+       self.ruta_imagenes = r"img/"
 
         # Registrar fuente personalizada
-        LabelBase.register(name="PixelifySans", fn_regular=r"C:\Users\metis_17gpyox\Desktop\Proyecto Estacion del Clima\fuentes\PixelifySans.ttf")
+        LabelBase.register(name="PixelifySans", fn_regular=r"fonts/PixelifySans.ttf")
 
         # Crear el fondo con degradado
         self.fondo = Fondo(size_hint=(1, 1))  # Esto asegura que ocupe todo el espacio
