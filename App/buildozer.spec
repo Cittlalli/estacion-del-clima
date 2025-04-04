@@ -28,10 +28,10 @@ source.exclude_dirs = tests, bin, venv
 version = 0.1
 
 # (list) Application requirements
-requirements = python3,kivy,random
+requirements = python3,kivy
 
 # (str) Icon of the application
-#icon.filename = %(source.dir)s/logo.png
+icon.filename = %(source.dir)s/logo.png
 
 # (list) Supported orientations
 orientation = portrait
