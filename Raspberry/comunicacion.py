@@ -1,27 +1,27 @@
-# comunicacion.py
-
 import network
 import time
 import json
 import socket
-from clima import determinar_condiciones_climaticas
+import uasyncio as asyncio
 import ubinascii
 import hashlib
 
 # Wi-Fi
-SSID = "TP-Link_CC10"
-PASSWORD = "18367638"
+SSID = ""
+PASSWORD = ""
 
-conexion_ws_activa = None  # conexión websocket global
+conexion_ws_activa = []  # conexión websocket global
 
 def set_conexion_ws(conn):
-    global conexion_ws_activa
-    conexion_ws_activa = conn
-
+    if conn not in conexion_ws_activa:
+        conexion_ws_activa.append(conn)
+        
+def remove_conexion_ws(conn):
+    if conn in conexion_ws_activa:
+        conexion_ws_activa.remove(conn)
 
 def get_conexion_ws():
     return conexion_ws_activa
-
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -45,17 +45,26 @@ def connect_wifi():
         return False
 
 
-def iniciar_servidor_websocket():
+async def iniciar_servidor_websocket():
     print(f"🌐 WebSocket en puerto 8765...")
     addr = socket.getaddrinfo("0.0.0.0", 8765)[0][-1]
     s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(addr)
-    s.listen(1)
+    s.listen(5)
+    s.setblocking(False)
     print("Esperando conexiones...")
 
-    conn, addr = s.accept()
-    print("📡 Cliente conectado desde", addr)
-
+    while True:
+        try:
+            conn, addr = await asyncio.sleep_ms(0) or s.accept()
+            conn.setblocking(True)
+            print("📡 Cliente conectado desde", addr)
+            asyncio.create_task(handle_client(conn))
+        except:
+            await asyncio.sleep(0.1)
+            
+async def handle_client(conn):
     try:
         data = conn.recv(1024)
         if b"Upgrade: websocket" in data:
@@ -78,18 +87,24 @@ def iniciar_servidor_websocket():
             conn.send(handshake.encode())
             set_conexion_ws(conn)
             print("✅ Conexión WebSocket establecida.")
-            return True
     except Exception as e:
-        print("❌ Error en conexión:", e)
-
-    return False
-
+        print("❌ Error al hacer handshake:", e)
+        return
+    try:
+        while True:
+            await asyncio.sleep(5)
+    except Exception as e:
+        print("🔌 Cliente desconectado:", e)
+    finally:
+        remove_conexion_ws(conn)
+        conn.close()
+        print("🧹 Conexión cerrada y removida")
 
 def send_ws_message(conn, message):
     try:
         payload = message.encode("utf-8")
         header = bytearray()
-        header.append(0x81)  # texto, FIN = 1
+        header.append(0x81) 
 
         length = len(payload)
         if length < 126:
@@ -105,4 +120,10 @@ def send_ws_message(conn, message):
         print(f"📤 Enviado: {message}")
     except Exception as e:
         print("❌ Error al enviar:", e)
-
+        remove_conexion_ws(conn)
+        conn.close()
+        
+async def send_message_to_all(message):
+    for conn in list(conexion_ws_activa):
+        send_ws_message(conn, message)
+        await asyncio.sleep(0)
