@@ -11,53 +11,71 @@ from machine import Pin, I2C
 
 # --- Clase DHT11 ---
 class InvalidChecksum(Exception):
+    """Se lanza cuando el checksum del DHT11 no coincide"""
     pass
 
 class InvalidPulseCount(Exception):
+    """Se lanza cuando la cantidad de pulsos recibidos del DHT11 es incorrecta"""
     pass
 
+# Constantes utilizadas en la lectura del sensor DHT11
 MAX_UNCHANGED = const(100)
 MIN_INTERVAL_US = const(200000)
 HIGH_LEVEL = const(50)
 EXPECTED_PULSES = const(84)
 
 class DHT11:
+    """
+    Clase para interactuar con el sensor de temperatura y humedad DHT11.
+    """
     _temperature: float
     _humidity: float
 
     def __init__(self, pin):
+        """
+        Inicializa el sensor DHT11.
+
+        :param pin: Pin GPIO usado para la comunicación.
+        """
         self._pin = pin
         self._last_measure = utime.ticks_us()
         self._temperature = -1
         self._humidity = -1
 
     def measure(self):
+        """
+        Realiza una nueva medición si ha pasado el tiempo mínimo requerido.
+        """
         current_ticks = utime.ticks_us()
         if utime.ticks_diff(current_ticks, self._last_measure) < MIN_INTERVAL_US and (
             self._temperature > -1 or self._humidity > -1
         ):
-            return
+            return  # No realiza medición si ya hay una reciente
 
-        self._send_init_signal()
-        pulses = self._capture_pulses()
-        buffer = self._convert_pulses_to_buffer(pulses)
-        self._verify_checksum(buffer)
+        self._send_init_signal()  # Envía la señal de inicio
+        pulses = self._capture_pulses()  # Captura los pulsos del sensor
+        buffer = self._convert_pulses_to_buffer(pulses)  # Convierte pulsos en datos
+        self._verify_checksum(buffer)  # Verifica integridad
 
+        # Extrae temperatura y humedad
         self._humidity = buffer[0] + buffer[1] / 10
         self._temperature = buffer[2] + buffer[3] / 10
         self._last_measure = utime.ticks_us()
 
     @property
     def humidity(self):
+        """Devuelve la humedad medida en %"""
         self.measure()
         return self._humidity
 
     @property
     def temperature(self):
+        """Devuelve la temperatura medida en °C"""
         self.measure()
         return self._temperature
 
     def _send_init_signal(self):
+        """Envía la señal de inicio al sensor DHT11"""
         self._pin.init(Pin.OUT, Pin.PULL_DOWN)
         self._pin.value(1)
         utime.sleep_ms(50)
@@ -66,6 +84,10 @@ class DHT11:
 
     @micropython.native
     def _capture_pulses(self):
+        """
+        Captura los pulsos enviados por el sensor.
+        :return: Lista de duraciones de pulsos
+        """
         pin = self._pin
         pin.init(Pin.IN, Pin.PULL_UP)
 
@@ -91,9 +113,10 @@ class DHT11:
         pin.init(Pin.OUT, Pin.PULL_DOWN)
         if idx != EXPECTED_PULSES:
             raise InvalidPulseCount("Expected {} but got {} pulses".format(EXPECTED_PULSES, idx))
-        return transitions[4:]
+        return transitions[4:] # Omitimos los 4 primeros pulsos de sincronización
 
     def _convert_pulses_to_buffer(self, pulses):
+        """Convierte los pulsos en una lista de bytes"""
         binary = 0
         for idx in range(0, len(pulses), 2):
             binary = (binary << 1) | int(pulses[idx] > HIGH_LEVEL)
@@ -103,11 +126,14 @@ class DHT11:
         return buffer
 
     def _verify_checksum(self, buffer):
+        """Verifica que el checksum sea válido"""
         checksum = sum(buffer[0:4]) & 0xFF
         if checksum != buffer[4]:
             raise InvalidChecksum()
 
 # --- Clase BMP280 ---
+
+# Constantes de registro para BMP280
 REG_CONFIG = 0xF5
 REG_CTRL_MEAS = 0xF4
 REG_PRESSURE_MSB = 0xF7
@@ -116,7 +142,18 @@ REG_DIG_START = 0x88
 NUM_CALIB_PARAMS = 24
 
 class BMP280:
+    """
+    Clase para interactuar con el sensor BMP280.
+    Permite leer temperatura y presión barométrica.
+    """
+
     def __init__(self, i2c, address=0x76):
+        """
+        Inicializa el sensor BMP280.
+
+        :param i2c: Objeto I2C.
+        :param address: Dirección I2C del sensor (por defecto 0x76).
+        """
         self.i2c = i2c
         self.address = address
         self.calib_params = {}
@@ -124,8 +161,10 @@ class BMP280:
         self._initialize_sensor()
 
     def _load_calibration(self):
+        """Lee y almacena los parámetros de calibración del sensor"""
         data = list(self.i2c.readfrom_mem(self.address, REG_DIG_START, NUM_CALIB_PARAMS))
         self.calib_params = {
+            # Parámetros de calibración según datasheet
             "dig_t1": data[1] << 8 | data[0],
             "dig_t2": (data[3] << 8 | data[2]) - 0x10000 if data[3] & 0x80 else data[3] << 8 | data[2],
             "dig_t3": (data[5] << 8 | data[4]) - 0x10000 if data[5] & 0x80 else data[5] << 8 | data[4],
@@ -141,17 +180,29 @@ class BMP280:
         }
 
     def _initialize_sensor(self):
+        """Configura el sensor con los parámetros necesarios para medición"""
         self.i2c.writeto_mem(self.address, REG_CONFIG, bytes([(0x04 << 5) | (0x05 << 2)]))
         self.i2c.writeto_mem(self.address, REG_CTRL_MEAS, bytes([(0x01 << 5) | (0x03 << 2) | 0x03]))
         time.sleep(0.1)
 
     def read_raw_data(self):
+        """
+        Lee los valores crudos de temperatura y presión desde el sensor.
+
+        :return: Tuple (raw_temp, raw_pressure)
+        """
         data = list(self.i2c.readfrom_mem(self.address, REG_PRESSURE_MSB, 6))
         raw_pressure = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
         raw_temp = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
         return raw_temp, raw_pressure
 
     def convert_temp(self, raw_temp):
+        """
+        Convierte la temperatura cruda a grados Celsius (×100).
+
+        :param raw_temp: Valor crudo de temperatura.
+        :return: Temperatura en °C ×100.
+        """
         params = self.calib_params
         var1 = (((raw_temp >> 3) - (params["dig_t1"] << 1)) * params["dig_t2"]) >> 11
         var2 = (((((raw_temp >> 4) - params["dig_t1"]) * ((raw_temp >> 4) - params["dig_t1"])) >> 12) * params["dig_t3"]) >> 14
@@ -159,6 +210,13 @@ class BMP280:
         return (t_fine * 5 + 128) >> 8
 
     def convert_pressure(self, raw_pressure, raw_temp):
+        """
+        Convierte la presión cruda a presión atmosférica en hPa.
+
+        :param raw_pressure: Valor crudo de presión.
+        :param raw_temp: Valor crudo de temperatura (requerido para compensación).
+        :return: Presión en hPa.
+        """
         params = self.calib_params
         t_fine = self.convert_temp(raw_temp)
         var1 = ((t_fine >> 1) - 64000)
