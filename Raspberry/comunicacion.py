@@ -5,10 +5,10 @@ import socket
 from clima import determinar_condiciones_climaticas
 
 # Configuración de la red Wi-Fi
-SSID = "TP-Link_CC10"  # Reemplaza con tu SSID
-PASSWORD = "18367638"  # Reemplaza con tu contraseña
+SSID = ""  # Reemplaza con tu SSID
+PASSWORD = ""  # Reemplaza con tu contraseña
 
-conexion_ws_activa = None  # Variable global temporal
+conexion_ws_activa = None 
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -78,7 +78,7 @@ def handle_client(conn, dht_data, bmp_data):
                 f"Sec-WebSocket-Accept: {response_key}\r\n\r\n"
             )
             conn.send(handshake.encode())
-            conexion_ws_activa = conn  # Guardar la conexión activa
+            conexion_ws_activa = conn 
 
             while True:
                 time.sleep(1)  
@@ -91,7 +91,7 @@ def send_ws_message(conn, message):
     payload = message.encode("utf-8")
     header = bytearray()
 
-    header.append(0x81)  # texto, FIN = 1
+    header.append(0x81)  
     length = len(payload)
     if length < 126:
         header.append(length)
