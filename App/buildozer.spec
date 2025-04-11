@@ -4,7 +4,7 @@
 title = Clima App
 
 # (str) Package name
-package.name = clima_app
+package.name = clima_App
 
 # (str) Package domain (needed for android/ios packaging)
 package.domain = com.metis
