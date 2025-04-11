@@ -1,5 +1,3 @@
-# main.py
-
 import uasyncio as asyncio 
 import machine
 from machine import Pin, I2C
