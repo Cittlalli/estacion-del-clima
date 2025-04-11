@@ -1,5 +1,3 @@
-# sensors.py
-
 import array
 import time
 import utime
