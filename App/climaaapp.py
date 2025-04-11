@@ -1,3 +1,4 @@
+import asyncio
 import random
 import os
 from kivy.app import App
@@ -9,15 +10,11 @@ from kivy.uix.image import Image
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.core.text import LabelBase
-from kivy.config import Config
-import time
 from kivy.uix.floatlayout import FloatLayout
 from kivy.clock import Clock
-import websocket
-import threading
-import json  
+import json
+import websockets  
 
-# Diccionario de colores para cada condición climática
 colores = {
     "tormenta": ("#1f1d59", "#3264a8"),
     "nublado": ("#515159", "#8f8f8f"),
@@ -63,35 +60,35 @@ class Fondo(Widget):
         hex_color = hex_color.lstrip('#')
         return tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
 
+
 class ClimaApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.activo = True
+        self.tasks = [] 
+
+    async def async_run(self, **kwargs):
+        task = asyncio.create_task(self.iniciar_websocket())
+        self.tasks.append(task)
+        await super().async_run(**kwargs)
+        
     def build(self):
         self.condicion_actual = "normal_dia"
-        self.ruta_imagenes = r"img/"
-
-        # Registrar fuente personalizada
-        LabelBase.register(name="PixelifySans", fn_regular=r"fonts/PixelifySans.ttf")
-
-        # Crear el fondo con degradado
-        self.fondo = Fondo(size_hint=(1, 1))  # Esto asegura que ocupe todo el espacio
-
-        # Layout principal usando FloatLayout para que el fondo no colisione con los demás elementos
+        self.ruta_imagenes = "img/"
+        LabelBase.register(name="PixelifySans", fn_regular="fonts/PixelifySans.ttf")
+        self.fondo = Fondo(size_hint=(1, 1))
         root = FloatLayout(size_hint=(1, 1))
-
-        # Contenedor de contenido (con imagen, etiquetas y botones)
         self.contenedor = BoxLayout(orientation='vertical', spacing=10, padding=10, size_hint=(1, 1))
 
-        # Crear widgets
-        self.imagen_label = Image(size_hint=(1, 0.4))  # Menos de la mitad
+        self.imagen_label = Image(size_hint=(1, 0.4))
         self.label_condicion = Label(text="--", font_name="PixelifySans", font_size=fuente_grande, bold=True, size_hint=(1, None), height=screen_height * 0.08)
         self.label_temp = Label(text="Temperatura: -- °C", font_name="PixelifySans", font_size=fuente_media, size_hint=(1, None), height=screen_height * 0.06)
         self.label_hum = Label(text="Humedad: -- %", font_name="PixelifySans", font_size=fuente_media, size_hint=(1, None), height=screen_height * 0.06)
         self.label_pres = Label(text="Presión: -- hPa", font_name="PixelifySans", font_size=fuente_media, size_hint=(1, None), height=screen_height * 0.06)
 
-        # Botones
         self.btn_actualizar = Button(text="Actualizar Clima", font_name="PixelifySans", font_size=fuente_chica, size_hint=(1, 0.08))
         self.btn_ver_todas = Button(text="Ver todas las condiciones", font_name="PixelifySans", font_size=fuente_chica, size_hint=(1, 0.08))
-        
-        # Agregar widgets al contenedor
+
         self.contenedor.add_widget(self.imagen_label)
         self.contenedor.add_widget(self.label_condicion)
         self.contenedor.add_widget(self.label_temp)
@@ -100,61 +97,53 @@ class ClimaApp(App):
         self.contenedor.add_widget(self.btn_actualizar)
         self.contenedor.add_widget(self.btn_ver_todas)
 
-        # Agregar contenedor al root
-        root.add_widget(self.fondo) 
-        root.add_widget(self.contenedor)  
+        root.add_widget(self.fondo)
+        root.add_widget(self.contenedor)
 
-        # Conectar eventos
         self.btn_actualizar.bind(on_press=self.simular_actualizacion)
         self.btn_ver_todas.bind(on_press=self.ver_todas_las_condiciones)
 
-        # Aplicar fondo inicial
         self.actualizar_fondo()
-
-        threading.Thread(target=self.iniciar_websocket, daemon=True).start()
-
         return root
-    
-    def iniciar_websocket(self):
-        def on_message(ws, message):
-            print(f"📡 Mensaje recibido: {message}")
+
+    async def iniciar_websocket(self):
+        uri = "ws://192.168.0.106:8765"
+        while self.activo:
             try:
-                datos = json.loads(message)
-                temperatura = datos.get("temperatura", 0)
-                humedad = datos.get("humedad", 0)
-                presion = datos.get("presion", 0)
-                condicion = datos.get("condicion", "normal_dia")
-
-                # Usar Clock para actualizar la UI desde un hilo externo
-                Clock.schedule_once(lambda dt: self.actualizar_clima(temperatura, humedad, presion, condicion))
+                async with websockets.connect(uri) as websocket:
+                    print("✅ Conectado al WebSocket")
+                    while self.activo:
+                        message = await websocket.recv()
+                        print(f"📡 Mensaje recibido: {message}")
+                        try:
+                            datos = json.loads(message)
+                            temperatura = datos.get("temperatura", 0)
+                            humedad = datos.get("humedad", 0)
+                            presion = datos.get("presion", 0)
+                            condicion = datos.get("condicion", "normal_dia")
+                            Clock.schedule_once(lambda dt: self.actualizar_clima(temperatura, humedad, presion, condicion))
+                        except Exception as e:
+                            print(f"❌ Error procesando datos: {e}")
             except Exception as e:
-                print(f"Error procesando datos: {e}")
+                if self.activo:
+                    print(f"🔁 Reintentando conexión WebSocket en 5s: {e}")
+                    await asyncio.sleep(5)
+        
+    def on_stop(self):
+        print("🛑 Aplicación cerrada por el usuario")
+        self.activo = False  
+        for task in self.tasks:
+            task.cancel()
 
-        def on_error(ws, error):
-            print(f"❌ Error WebSocket: {error}")
-
-        def on_close(ws, close_status_code, close_msg):
-            print("🔌 Conexión WebSocket cerrada")
-
-        def on_open(ws):
-            print("✅ Conectado al WebSocket")
-
-        ws = websocket.WebSocketApp("ws://192.168.0.106:8765",
-                                    on_open=on_open,
-                                    on_message=on_message,
-                                    on_error=on_error,
-                                    on_close=on_close)
-        ws.run_forever()
 
     def actualizar_clima(self, temperatura, humedad, presion, condicion=None):
-        self.condicion_actual = condicion  
+        self.condicion_actual = condicion
         self.label_temp.text = f"Temperatura: {temperatura} °C"
         self.label_hum.text = f"Humedad: {humedad} %"
         self.label_pres.text = f"Presión: {presion} hPa"
         self.label_condicion.text = self.condicion_actual
         self.cargar_imagen(self.condicion_actual)
         self.actualizar_fondo()
-
 
     def cargar_imagen(self, condicion):
         imagen_path = os.path.join(self.ruta_imagenes, f"{condicion}.png")
@@ -187,7 +176,10 @@ class ClimaApp(App):
         else:
             self.mostrar_siguiente_condicion(condiciones, 0)
 
-
-
 if __name__ == '__main__':
-    ClimaApp().run()
+    import sys
+    try:
+        asyncio.run(ClimaApp().async_run(async_lib='asyncio'))
+    except Exception as e:
+        print(f"❌ Error en la ejecución: {e}")
+        sys.exit(1)
