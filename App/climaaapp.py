@@ -101,8 +101,8 @@ class ClimaApp(App):
         self.contenedor.add_widget(self.btn_ver_todas)
 
         # Agregar contenedor al root
-        root.add_widget(self.fondo)  # Fondo al fondo, no ocupa espacio
-        root.add_widget(self.contenedor)  # Los widgets se apilan sobre el fondo
+        root.add_widget(self.fondo) 
+        root.add_widget(self.contenedor)  
 
         # Conectar eventos
         self.btn_actualizar.bind(on_press=self.simular_actualizacion)
@@ -185,7 +185,6 @@ class ClimaApp(App):
             self.actualizar_fondo()
             Clock.schedule_once(lambda dt: self.mostrar_siguiente_condicion(condiciones, index + 1), 2)
         else:
-            # Volver al inicio cuando se lleguen todas las condiciones
             self.mostrar_siguiente_condicion(condiciones, 0)
 
 
