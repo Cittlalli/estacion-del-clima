@@ -1,14 +1,27 @@
+# comunicacion.py
+
 import network
 import time
 import json
 import socket
 from clima import determinar_condiciones_climaticas
+import ubinascii
+import hashlib
 
-# Configuración de la red Wi-Fi
-SSID = ""  # Reemplaza con tu SSID
-PASSWORD = ""  # Reemplaza con tu contraseña
+# Wi-Fi
+SSID = "TP-Link_CC10"
+PASSWORD = "18367638"
 
-conexion_ws_activa = None 
+conexion_ws_activa = None  # conexión websocket global
+
+def set_conexion_ws(conn):
+    global conexion_ws_activa
+    conexion_ws_activa = conn
+
+
+def get_conexion_ws():
+    return conexion_ws_activa
+
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -30,37 +43,22 @@ def connect_wifi():
     else:
         print("\nError: No se pudo conectar a Wi-Fi")
         return False
-    
-def actualizar_datos_sensores(dht_data, bmp_data):
-    global conexion_ws_activa
-    if conexion_ws_activa:
-        try:
-            hum_dht = dht_data[1]
-            temp_bmp, presion = bmp_data
 
-            condicion = determinar_condiciones_climaticas(temp_bmp, hum_dht, presion)
 
-            mensaje = json.dumps({
-                "temperatura": temp_bmp,
-                "humedad": hum_dht,
-                "presion": presion,
-                "condicion": condicion
-            })
+def iniciar_servidor_websocket():
+    print(f"🌐 WebSocket en puerto 8765...")
+    addr = socket.getaddrinfo("0.0.0.0", 8765)[0][-1]
+    s = socket.socket()
+    s.bind(addr)
+    s.listen(1)
+    print("Esperando conexiones...")
 
-            send_ws_message(conexion_ws_activa, mensaje)
-        except Exception as e:
-            print("❌ Error al enviar datos:", e)
+    conn, addr = s.accept()
+    print("📡 Cliente conectado desde", addr)
 
-def handle_client(conn, dht_data, bmp_data):
-    global conexion_ws_activa
-    print("🔌 Cliente conectado.")
     try:
         data = conn.recv(1024)
         if b"Upgrade: websocket" in data:
-            # Handshake
-            import ubinascii
-            import hashlib
-
             key = ""
             for line in data.decode().split("\r\n"):
                 if "Sec-WebSocket-Key" in line:
@@ -78,41 +76,33 @@ def handle_client(conn, dht_data, bmp_data):
                 f"Sec-WebSocket-Accept: {response_key}\r\n\r\n"
             )
             conn.send(handshake.encode())
-            conexion_ws_activa = conn 
-
-            while True:
-                time.sleep(1)  
+            set_conexion_ws(conn)
+            print("✅ Conexión WebSocket establecida.")
+            return True
     except Exception as e:
         print("❌ Error en conexión:", e)
-    finally:
-        conn.close()
+
+    return False
+
 
 def send_ws_message(conn, message):
-    payload = message.encode("utf-8")
-    header = bytearray()
+    try:
+        payload = message.encode("utf-8")
+        header = bytearray()
+        header.append(0x81)  # texto, FIN = 1
 
-    header.append(0x81)  
-    length = len(payload)
-    if length < 126:
-        header.append(length)
-    elif length < (1 << 16):
-        header.append(126)
-        header.extend(length.to_bytes(2, "big"))
-    else:
-        header.append(127)
-        header.extend(length.to_bytes(8, "big"))
+        length = len(payload)
+        if length < 126:
+            header.append(length)
+        elif length < (1 << 16):
+            header.append(126)
+            header.extend(length.to_bytes(2, "big"))
+        else:
+            header.append(127)
+            header.extend(length.to_bytes(8, "big"))
 
-    conn.send(header + payload)
+        conn.send(header + payload)
+        print(f"📤 Enviado: {message}")
+    except Exception as e:
+        print("❌ Error al enviar:", e)
 
-def iniciar_servidor_websocket(puerto=8765, dht_data=None, bmp_data=None):
-    print(f"🌐 WebSocket en puerto {puerto}...")
-    addr = socket.getaddrinfo("0.0.0.0", puerto)[0][-1]
-    s = socket.socket()
-    s.bind(addr)
-    s.listen(1)
-    print("Esperando conexiones...")
-
-    while True:
-        conn, addr = s.accept()
-        print("📡 Cliente conectado desde", addr)
-        handle_client(conn, dht_data, bmp_data)
