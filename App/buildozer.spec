@@ -28,7 +28,7 @@ source.exclude_dirs = tests, bin, venv
 version = 0.1
 
 # (list) Application requirements
-requirements = python3,kivy,websocket
+requirements = python3,kivy,websockets
 
 # (str) Icon of the application
 icon.filename = %(source.dir)s/logo.png
