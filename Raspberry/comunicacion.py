@@ -7,8 +7,11 @@ import ubinascii
 import hashlib
 
 # Credenciales de red Wi-Fi
-SSID = ""
-PASSWORD = ""
+SSID = "TP-Link_CC10"
+PASSWORD = "18367638"
+
+wifi_conectado = False
+wlan = network.WLAN(network.STA_IF)
 
 # Lista global para gestionar conexiones WebSocket activas
 conexion_ws_activa = []
@@ -41,31 +44,34 @@ def get_conexion_ws():
 
 def connect_wifi():
     """
-    Intenta conectar el dispositivo a la red Wi-Fi definida por SSID y PASSWORD.
-
-    :return: True si se conecta exitosamente, False en caso contrario.
+    Conecta a Wi-Fi si no está conectado. Actualiza wifi_conectado.
     """
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    print("Conectando a Wi-Fi...")
-    wlan.connect(SSID, PASSWORD)
+    global wifi_conectado
 
-    timeout = 10
-    for _ in range(timeout):
-        if wlan.isconnected():
-            break
-        print(".", end="")
-        time.sleep(1)
+    if not wlan.active():
+        wlan.active(True)
 
-    if wlan.isconnected():
-        print("\nConectado a Wi-Fi")
+    if not wlan.isconnected():
+        print("Conectando a Wi-Fi...")
+        wlan.connect(SSID, PASSWORD)
+
+        for _ in range(10):
+            if wlan.isconnected():
+                break
+            print(".", end="")
+            time.sleep(1)
+
+    wifi_conectado = wlan.isconnected()
+
+    if wifi_conectado:
+        print("\n✅ Conectado a Wi-Fi")
         print("Dirección IP:", wlan.ifconfig()[0])
-        return True
     else:
-        print("\nError: No se pudo conectar a Wi-Fi")
-        return False
+        print("\n❌ Error: No se pudo conectar a Wi-Fi")
+    return wifi_conectado
 
-async def iniciar_servidor_websocket():
+
+async def iniciar_servidor_websocket(ultimo_mensaje):
     """
     Inicia un servidor WebSocket en el puerto 8765 que acepta múltiples conexiones entrantes.
     """
@@ -84,11 +90,13 @@ async def iniciar_servidor_websocket():
             conn, addr = await asyncio.sleep_ms(0) or s.accept()
             conn.setblocking(True)
             print("📡 Cliente conectado desde", addr)
-            asyncio.create_task(handle_client(conn))
-        except:
+            asyncio.create_task(handle_client(conn,ultimo_mensaje))
+        except OSError as e:
+            if e.errno != 11:
+                print("❌ Error al aceptar conexión:", e)
             await asyncio.sleep(0.1)
-
-async def handle_client(conn):
+            
+async def handle_client(conn,ultimo_mensaje):
     """
     Maneja la conexión de un cliente WebSocket realizando el handshake y gestionando la conexión.
 
@@ -117,6 +125,9 @@ async def handle_client(conn):
             conn.send(handshake.encode())
             set_conexion_ws(conn)
             print("✅ Conexión WebSocket establecida.")
+            if ultimo_mensaje:
+                print("🔁 Enviando último mensaje al nuevo cliente...")
+                await send_ws_message(conn, ultimo_mensaje)
     except Exception as e:
         print("❌ Error al hacer handshake:", e)
         return
@@ -124,6 +135,12 @@ async def handle_client(conn):
     try:
         # Mantiene la conexión activa
         while True:
+            try:
+                data = conn.recv(2)  # verifica la conexión
+                if not data:
+                    raise Exception("Cliente desconectado")
+            except:
+                break
             await asyncio.sleep(5)
     except Exception as e:
         print("🔌 Cliente desconectado:", e)
@@ -133,7 +150,7 @@ async def handle_client(conn):
         conn.close()
         print("🧹 Conexión cerrada y removida")
 
-def send_ws_message(conn, message):
+async def send_ws_message(conn, message):
     """
     Envía un mensaje a un cliente WebSocket con el protocolo adecuado.
 
@@ -143,7 +160,7 @@ def send_ws_message(conn, message):
     try:
         payload = message.encode("utf-8")
         header = bytearray()
-        header.append(0x81)  # Frame tipo texto, FIN
+        header.append(0x81) 
 
         length = len(payload)
         if length < 126:
@@ -164,10 +181,15 @@ def send_ws_message(conn, message):
 
 async def send_message_to_all(message):
     """
-    Envía un mensaje a todos los clientes WebSocket conectados.
+    Envía un mensaje a todos los clientes WebSocket conectados, si los hay.
 
     :param message: Texto del mensaje a enviar.
     """
-    for conn in list(conexion_ws_activa):
-        send_ws_message(conn, message)
+    conexiones = get_conexion_ws()
+    if not conexiones:
+        print("⚠️ No hay conexiones WebSocket activas.")
+        return
+
+    for conn in list(conexiones):
+        await send_ws_message(conn, message)
         await asyncio.sleep(0)
