@@ -1,8 +1,8 @@
 # 🌤️ Estación del Clima
 
-Este repositorio contiene una solución completa para monitorear condiciones climáticas usando una Raspberry Pi Pico W y visualizar los datos desde una aplicación móvil construida con Kivy.  
+Este repositorio contiene una solución completa para monitorear condiciones climáticas usando una Raspberry Pi Pico W. Visualiza los datos desde una aplicación móvil construida con Kivy y en una pantalla OLED conectada a la Raspberry Pico. Escribe y lee la informacion de una tarjeta SD.
 
-Incluye sensores DHT11 y BMP280, conectividad Wi-Fi y comunicación en tiempo real mediante WebSockets.
+Incluye sensores DHT11 y BMP280, conectividad Wi-Fi, comunicación en tiempo real mediante WebSockets, almacenamiento externo.
 
 ---
 
@@ -15,7 +15,9 @@ Estacion-del-clima/
 │   ├── clima.py                # Lógica para determinar condiciones climáticas
 │   ├── comunicacion.py         # Manejo de Wi-Fi y WebSockets
 │   ├── main.py                 # Programa principal que lee sensores y envía datos
-│   ├── sensors.py              # Clases para manejar los sensores DHT11 y BMP280
+│   ├── sensors.py              # Clase para manejar los sensores DHT11 y BMP280
+│   ├── sd_logger.py            # Clases para manejar el modulo SD
+│   ├── display.py              # Repositorio de byte arrays de estado y       condiciones y funciones que manejan la pantalla OLED
 ├── App/                        # Aplicación móvil con Kivy (Python)
 │   ├── main.py                 # Interfaz gráfica y recepción de datos
 │   ├── buildozer.spec          # Configuración para compilar APK
@@ -34,7 +36,9 @@ Estacion-del-clima/
    - `sensors.py`
    - `comunicacion.py`
    - `clima.py`
-
+   - `sd_logger.py`
+   - `display.py`
+3. Instalar las librerias `sdcard` y `ssd1306` en la Raspberry
 > **Nota**: Asegúrate de configurar correctamente el SSID y la contraseña en `comunicacion.py`.
 
 ---
@@ -76,6 +80,8 @@ Estacion-del-clima/
 - 📈 Lectura precisa de temperatura, humedad y presión
 - 🎨 UI interactiva y visual adaptable a condiciones climáticas
 - 📲 Compatible con dispositivos Android
+- 🗃️ Registro de datos en memoria SD
+- 📟 Visualizacion en pantalla OLED
 
 ---
 
