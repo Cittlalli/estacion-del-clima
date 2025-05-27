@@ -1,6 +1,7 @@
 """
 Este módulo implementa una aplicación gráfica interactiva usando Kivy, que visualiza en tiempo real
-datos meteorológicos obtenidos vía WebSocket. Además, permite mostrar un historial de datos mediante gráficos.
+datos meteorológicos obtenidos vía WebSocket. 
+Además, permite mostrar un historial de datos mediante gráficos.
 
 Funcionalidades principales:
 - Conexión asíncrona a un servidor WebSocket.
