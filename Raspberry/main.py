@@ -1,254 +1,262 @@
+"""
+Sistema IoT para monitoreo ambiental basado en el BME280,
+con visualización en pantalla OLED, almacenamiento en SD, 
+y comunicación mediante WebSocket.
+
+Este script:
+- Lee datos ambientales (temperatura, humedad, presión) desde un sensor BME280.
+- Los muestra en una pantalla OLED.
+- Los almacena periódicamente en una tarjeta SD.
+- Los envía en tiempo real mediante WebSocket.
+- Sincroniza la hora vía NTP y administra la conectividad Wi-Fi.
+
+Dependencias:
+    - machine (I2C, Pin)
+    - uasyncio
+    - time, ntptime
+    - ssd1306
+    - ujson, os
+    - clima, sensors, comunicacion, sd_logger, display (módulos personalizados)
+"""
+
 import uasyncio as asyncio
-import machine
-from machine import Pin, I2C
-import _thread
 import time
-import json
+from machine import Pin, I2C
 import ssd1306
+import ntptime
+import ujson as json
+import os
 
 from clima import determinar_condiciones_climaticas
-from sensors import DHT11, BMP280
-from comunicacion import connect_wifi, iniciar_servidor_websocket, send_message_to_all, get_conexion_ws
+from sensors import BME280
+from comunicacion import WiFiManager, WebSocketServer
 from sd_logger import SDLogger
-from display import mostrar_datos
+from display import mostrar_datos, mostrar_logo
 
-# Pines sesores
-DHT_PIN_NUM = 28  # Pin de lectura del sensor DHT11
-BMP_I2C_SDA_PIN = 4  # Pin SDA del bus I2C
-BMP_I2C_SCL_PIN = 5  # Pin SCL del bus I2C
+# Pines sensores
+BME_I2C_SDA_PIN = 26
+BME_I2C_SCL_PIN = 27
 
-#Pines SD
-SD_SPI_ID     = 0
-SD_SCK_PIN = 18         # Pin SCK para SD AMARILLO
-SD_MOSI_PIN = 19        # Pin MOSI para SD VERDE
-SD_MISO_PIN = 16       # Pin MISO para SD MORADO
-SD_CS_PIN = 17         # Pin CS (chip select) para SD AZUL
+# Pines SD
+SD_SPI_ID = 0
+SD_SCK_PIN = 18
+SD_MOSI_PIN = 19
+SD_MISO_PIN = 16
+SD_CS_PIN = 17
 
-#Pines OLED
+# Pines OLED
 OLED_I2C_SDA_PIN = 2
 OLED_I2C_SCL_PIN = 3
 
-# Instanciar sensores
-dht_sensor_obj = DHT11(Pin(DHT_PIN_NUM))  # Crear objeto para el sensor DHT11
-i2c0 = I2C(0, scl=Pin(BMP_I2C_SCL_PIN), sda=Pin(BMP_I2C_SDA_PIN))  # Inicializar bus I2C
-bmp_sensor_obj = BMP280(i2c=i2c0)  # Crear objeto para el sensor BMP280
+DEBUG = True
+def debug(*args):
+    """
+    Imprime mensajes de depuración si `DEBUG` está activado.
+    Args:
+        *args: Mensajes a imprimir.
+    """
+    if DEBUG:
+        print("[DEBUG][MAIN]", *args)
 
-#Instaciar pantalla OLED
-i2c1= I2C(1, scl=Pin(OLED_I2C_SCL_PIN), sda=Pin(OLED_I2C_SDA_PIN))
+# Instanciar hardware
+debug("🛠️ Inicializando sensores y pantallas")
+i2c0 = I2C(0, scl=Pin(BME_I2C_SCL_PIN), sda=Pin(BME_I2C_SDA_PIN))
+bme = BME280.BME280(i2c=i2c0)
+i2c1 = I2C(1, scl=Pin(OLED_I2C_SCL_PIN), sda=Pin(OLED_I2C_SDA_PIN))
 oled = ssd1306.SSD1306_I2C(128, 64, i2c1)
 
-# Instanciar logger SD
+# Logger SD
 sd_logger = SDLogger(SD_SPI_ID, SD_SCK_PIN, SD_MOSI_PIN, SD_MISO_PIN, SD_CS_PIN)
-try:
-    sd_logger.init_sd()
-except Exception:
-    print("⚠️ No se pudo montar la SD al inicio. El sistema seguirá funcionando.")
 
-# Variables 
-dht_data = [None, None]
-bmp_data = [None, None]
-conexion_ws_activa = None
-wifi = None
-condicion_actual = None
+# Conectividad
+wifi = WiFiManager()
+ws_server = WebSocketServer(sd_logger)
+
+# Estados globales
 last_data = {"temp": None, "hum": None, "pres": None}
-last_condicion = "desconocido"
-last_flags = {
-    "enviando": False,
-    "conectado": False,
-    "guardando": False
-}
+ultimo_mensaje = None
+last_send_time = 0
+last_hist_time = 0
+last_slog_time = 0
 presion_anterior = None
 
-# Tarea asíncrona para leer datos del sensor DHT11
-async def dht_task():
+# Sincronizar hora vía NTP
+async def sync_ntp():
     """
-    Tarea asíncrona que mide la temperatura y humedad del sensor DHT11 cada 15 segundos.
-    Actualiza las variables dht_data con los últimos valores leídos.
+    Sincroniza la hora del sistema con un servidor NTP.
+    Reintenta hasta 5 veces si hay conexión Wi-Fi.
     """
-    global dht_data
-    while True:
-        try:
-            dht_sensor_obj.measure()  # Realizar medición
-            dht_data = (dht_sensor_obj.temperature, dht_sensor_obj.humidity)  # Guardar datos
-            print(f"DHT11 -> Temperatura:{dht_data[0]}°C Humedad: {dht_data[1]}%")
-        except Exception as e:
-            print("Error DHT11:", e)  # Manejo de errores en la lectura
-        await asyncio.sleep(15)  # Esperar 15 segundos antes de la siguiente medición
-
-# Tarea asíncrona para leer datos del sensor BMP280
-async def bmp_task():
-    """
-    Tarea asíncrona que lee la temperatura y presión del sensor BMP280 cada 15 segundos.
-    Actualiza las variables bmp_data con los últimos valores leídos.
-    """
-    global bmp_data
-    while True:
-        try:
-            raw_temp, raw_pressure = bmp_sensor_obj.read_raw_data()  # Leer datos crudos
-            temp = bmp_sensor_obj.convert_temp(raw_temp) / 100.0  # Convertir temperatura
-            pressure = bmp_sensor_obj.convert_pressure(raw_pressure, raw_temp)  # Convertir presión
-            bmp_data = (temp, pressure)  # Guardar datos
-            print(f"BMP280 -> Temp: {temp}°C, Presión: {pressure} Pa")
-        except Exception as e:
-            print("Error BMP280:", e)  # Manejo de errores en la lectura
-        await asyncio.sleep(15)  # Esperar 15 segundos antes de la siguiente medición
-
-# Tarea asíncrona para enviar los datos a través de WebSocket
-async def task_log_and_send():
-    """
-    Envía datos sólo si hubo un cambio o pasaron 10 min.
-    También guarda en SD si hubo cambio drástico o pasaron 10 min.
-    """
-    
-    global last_data, last_condicion, last_flags
-    
-    # Esperar a que wifi esté conectado
-    while not wifi:
-        await asyncio.sleep(1)
-
-    last_sent = time.time()
-    last_logged = time.time()
-
-    while True:
-        try:
-            # --- EXTRACCIÓN SEGURA DE DATOS ---
+    for _ in range(5):
+        if wifi.is_connected():
             try:
-                temp_raw = bmp_data[0]
-                pres_raw = bmp_data[1]
-            except (TypeError, IndexError):
-                temp_raw = pres_raw = None
-                print("⚠️ Datos BMP inválidos:", bmp_data)
+                ntptime.settime()
+                debug("🕒 Hora sincronizada con NTP")
+                return
+            except Exception as e:
+                debug("⚠️ Error al sincronizar NTP:", e)
+        await asyncio.sleep(2)
+    debug("❌ No se pudo sincronizar NTP tras varios intentos")
 
-            try:
-                hum_raw = dht_data[1]
-            except (TypeError, IndexError):
-                hum_raw = None
-                print("⚠️ Datos DHT inválidos:", dht_data)
-
-            # --- CONVERSIÓN Y VALIDACIÓN ---
-            temp = round(temp_raw, 2) if temp_raw is not None else None
-            hum  = round(hum_raw,   2) if hum_raw  is not None else None
-            pres = round(pres_raw,  2) if pres_raw is not None else None
-
-            # Si falta cualquiera, esperamos y volvemos a intentar
-            if None in (temp, hum, pres):
-                await asyncio.sleep(5)
-                continue
-            
-            cond = determinar_condiciones_climaticas(temp, hum, pres, presion_anterior=presion_anterior)
-
-            # cálculo de cambios y tiempos
-            cambios = (
-                abs(temp - (last_data["temp"] or 0)) > 0.5 or
-                abs(hum  - (last_data["hum"]  or 0)) > 2.0 or
-                abs(pres - (last_data["pres"] or 0)) > 10.0
-            )
-            ahora = time.time()
-            env_flag = cambios or (ahora - last_sent >= 60)
-            log_flag = cambios or (ahora - last_logged >= 60)
-
-            # Envío
-            if env_flag:
-                await send_message_to_all(json.dumps({
-                    "temperatura": temp,
-                    "humedad":    hum,
-                    "presion":    pres,
-                    "condicion":  cond
-                }))
-                last_sent = ahora
-
-            # SD
-            if log_flag:
-                if not sd_logger.sd_montada:
-                    sd_logger.intentar_reconexion()
-                if sd_logger.sd_montada:
-                    sd_logger.log_data(temp, pres, hum)
-                    last_logged = ahora
-                presion_anterior = pres
-
-            # ——— Actualizamos las globales ———
-            last_data["temp"]  = temp
-            last_data["hum"]   = hum
-            last_data["pres"]  = pres
-            last_condicion     = cond
-            last_flags["enviando"]   = env_flag
-            last_flags["conectado"]  = wifi
-            last_flags["guardando"]  = sd_logger.sd_montada
-
+# Lectura BME280
+async def bme_task():
+    """
+    Tarea asíncrona que lee periódicamente los datos del sensor BME280.
+    Actualiza la variable global `last_data` cada 15 segundos.
+    """
+    while True:
+        try:
+            last_data["temp"] = bme.temperature
+            last_data["hum"] = bme.humidity
+            last_data["pres"] = bme.pressure
+            debug(f"🌡️ Temp: {last_data['temp']}°C | 🧭 Pres: {last_data['pres']} hPa")
         except Exception as e:
-            print("❌ Error en task_log_and_send:", e)
+            debug("⚠️ Error al leer BMP280:", e)
+        await asyncio.sleep(15)
 
-        await asyncio.sleep(5)
+# Gestión Wi-Fi y servidor
+async def task_connectivity():
+    """
+    Administra la conectividad Wi-Fi y la inicialización del servidor WebSocket.
+    Intenta reconectar si se pierde la conexión y reinicia el servidor WebSocket si no está activo.
+    """
+    while True:
+        if not wifi.is_connected():
+            debug("📡 Intentando conectar Wi-Fi...")
+            wifi.connect()
+            if wifi.is_connected():
+                debug(f"Conectado correctamente. IP: {wifi.get_ip()}")
+                await sync_ntp()
+                ws_server.start(ultimo_mensaje)
+        else:
+            await asyncio.sleep(10)
+            if not ws_server.running:
+                debug("🔁 Reiniciando WebSocket Server")
+                ws_server.start(ultimo_mensaje)
+        if wifi.lost_connection():
+            debug("❌ Wi-Fi desconectado")
+            ws_server.stop()
+        await asyncio.sleep(3)
 
+# Mostrar en OLED
 async def task_display():
     """
-    Muestra en pantalla OLED los últimos valores de temp/hum/pres/condición.
+    Muestra los datos en una pantalla OLED.
+
+    Si los datos aún no están disponibles, muestra un logo de espera.
+    Una vez disponibles, se actualiza con datos ambientales y estado del sistema.
     """
+    showed_logo = False
     while True:
-        try:
+        ws_server.update_flags(sd_logger.sd_montada)
+        if None in last_data.values():
+            if not showed_logo:
+                debug("🖼️ Mostrando logo de espera en OLED")
+                mostrar_logo(oled)
+                showed_logo = True
+        else:
+            cond = determinar_condiciones_climaticas(
+                last_data["temp"], last_data["hum"], last_data["pres"], presion_anterior=presion_anterior
+            )
+            debug(f"📺 Mostrando OLED: {last_data['temp']}°C, {last_data['hum']}%, {last_data['pres']}hPa, Cond: {cond}")
             mostrar_datos(
                 oled,
-                last_data["temp"],
-                last_data["hum"],
-                last_data["pres"],
-                condicion=last_condicion,
-                enviando=bool(get_conexion_ws()),
-                conectado=last_flags["conectado"],
-                guardando=last_flags["guardando"]
+                last_data["temp"], last_data["hum"], last_data["pres"],
+                cond,
+                enviando=ws_server.flags['enviando'],
+                conectado=ws_server.flags['conectado'],
+                guardando=ws_server.flags['guardando']
             )
-        except Exception as e:
-            print("❌ Error en task_display:", e)
+            showed_logo = False
         await asyncio.sleep(5)
 
-# Función principal
+# Log y envío de datos/historial
+async def task_log_and_send():
+    """
+    Tarea principal de manejo de datos:
+        - Envía datos actuales cada 60 segundos por WebSocket.
+        - Envía el historial cada 60 segundos si hay conexión WebSocket.
+        - Guarda en la SD cada 10 minutos si está montada.
+        - Actualiza `ultimo_mensaje` y `presion_anterior`.
+    """
+    global ultimo_mensaje, last_send_time, last_slog_time, last_hist_time, presion_anterior
+    while not wifi.is_connected():
+        await asyncio.sleep(1)
+    while True:
+        now = time.time()
+        ws_server.update_flags(sd_logger.sd_montada)
+
+        if None in last_data.values():
+            await asyncio.sleep(5)
+            continue
+
+        cond = determinar_condiciones_climaticas(
+            last_data["temp"], last_data["hum"], last_data["pres"], presion_anterior=presion_anterior
+        )
+        msg = {
+            "temperatura": last_data["temp"],
+            "humedad": last_data["hum"],
+            "presion": last_data["pres"],
+            "condicion": cond
+        }
+        ultimo_mensaje = msg
+
+        if ws_server.connections:
+            if now - last_send_time >= 60:
+                debug("📤 Enviando datos actuales por WebSocket")
+                await ws_server.handle_sending(data=msg, send_history=False)
+                last_send_time = now
+
+            if now - last_hist_time >= 60:
+                debug("📦 Enviando historial por WebSocket")
+                await ws_server.handle_sending(data=None, send_history=True)
+                last_hist_time = now
+
+        if sd_logger.sd_montada and now - last_slog_time >= 600:
+            debug("💾 Guardando en SD")
+            sd_logger.log_data(
+                last_data["temp"], last_data["pres"], last_data["hum"]
+            )
+            last_slog_time = now
+
+        presion_anterior = last_data["pres"]
+        await asyncio.sleep(5)
+
 async def main():
     """
-    Función principal que inicializa la conexión Wi-Fi, el servidor WebSocket y las tareas asíncronas
-    para la lectura de sensores y el envío de datos.
+    Función principal que inicializa componentes, monta la SD y lanza las tareas asíncronas del sistema.
+    Verifica la existencia de la configuración Wi-Fi y carga el último dato guardado si está disponible.
     """
-    global conexion_ws_activa
-    global wifi
+    global presion_anterior, ultimo_mensaje
+    try:
+        debug("💽 Intentando montar SD...")
+        sd_logger.init_sd()
+        debug("✅ SD montada correctamente")
+        d = sd_logger.leer_ultimo_dato()
+        if d:
+            parts = d.strip().split(',')
+            if len(parts) == 4:
+                temp, pres, hum = map(float, parts[1:4])
+                presion_anterior = pres
+                cond0 = determinar_condiciones_climaticas(temp, hum, pres)
+                ultimo_mensaje = {"temperatura": temp, "humedad": hum, "presion": pres, "condicion": cond0}
+                debug(f"🔁 Último dato cargado: {ultimo_mensaje}")
+    except Exception as e:
+        debug("⚠️ Error al inicializar SD o leer datos:", e)
 
-    wifi = connect_wifi()  # Intentar conectar a Wi-Fi hasta tener éxit
-    
-    # Leer y transformar el último dato de la SD
-    ultimo_mensaje = None
-    if sd_logger.sd_montada:
-        try:
-            dato = sd_logger.leer_ultimo_dato() 
-            if dato:
-                partes = dato.strip().split(",")
-                if len(partes) == 4:
-                    temp = float(partes[1])
-                    pres = float(partes[2])
-                    presion_anterior = pres
-                    hum = float(partes[3])
-                    condi = determinar_condiciones_climaticas(temp, hum, pres)
-                    ultimo_mensaje = json.dumps({
-                        "temperatura": temp,
-                        "humedad": hum,
-                        "presion": pres,
-                        "condicion": condi
-                    })
-                else:
-                    ultimo_mensaje = None
-            else:
-                ultimo_mensaje = None
-        except Exception as e:
-            print("⚠️ No se pudo formatear último mensaje:", e)
-            ultimo_mensaje = None
-        
-    # Crear tareas asíncronas
-    asyncio.create_task(iniciar_servidor_websocket(ultimo_mensaje))
+    if "wifi_config.json" not in os.listdir('/'):
+        debug("📁 Creando plantilla wifi_config.json")
+        with open('/wifi_config.json', 'w') as f:
+            json.dump({"networks": [], "static": {}}, f)
+
+    debug("🚀 Iniciando tareas asincrónicas")
     asyncio.create_task(task_display())
-    asyncio.create_task(dht_task())
-    asyncio.create_task(bmp_task())
-    await asyncio.sleep(10)  # Esperar 10 segundos para que los sensores se estabilicen
+    await asyncio.sleep(3)
+    asyncio.create_task(task_connectivity())
+    asyncio.create_task(bme_task())
     asyncio.create_task(task_log_and_send())
 
-    # Bucle infinito para mantener las tareas en ejecución
     while True:
         await asyncio.sleep(1)
 
-# Ejecutar el código asíncrono
+debug("🧠 Ejecutando main()")
 asyncio.run(main())
