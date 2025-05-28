@@ -10,7 +10,7 @@ import os
 # Archivo de configuración de Wi-Fi
 default_config = {
     "networks": [
-        { "ssid": "Megacable-D570", "password": "b44p3D3DUc" }
+        { "ssid": "", "password": "" }
     ]
 }
 
