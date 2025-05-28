@@ -1,3 +1,18 @@
+"""
+Módulo para visualización en pantalla OLED con íconos de condiciones climáticas,
+estados de conectividad y logotipo empresarial.
+
+Requiere las bibliotecas:
+- `ssd1306`: Controlador para pantallas OLED con protocolo I2C o SPI.
+- `framebuf`: Para manejar gráficos de bajo nivel mediante buffers de imagen.
+
+Contiene:
+- Diccionarios de bitmaps para condiciones climáticas y estados del sistema.
+- Función para renderizar bitmaps en pantalla.
+- Función para mostrar el logotipo de la empresa.
+- Función para mostrar datos meteorológicos y estados del sistema.
+"""
+
 import ssd1306
 import framebuf
 
@@ -117,68 +132,108 @@ estados = {
         ]
 }
 
+# Bitmap del logo de la empresa 
+LOGO_BITMAP = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0x3f, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, 0xfc, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0x0f, 0xf8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x87, 0xe1, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0x83, 0xc3, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xc1, 0xc7, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0x00, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x1c, 0xfe, 0xff, 0xff, 
+    0xff, 0xff, 0x3f, 0x1e, 0x3e, 0xfc, 0xff, 0xff, 0xff, 0xff, 0x1f, 0x9f, 0x7f, 0xf0, 0xff, 0xff, 
+    0xff, 0xff, 0x8f, 0xcf, 0x7f, 0xf2, 0xff, 0xff, 0xff, 0xff, 0xc7, 0xe7, 0xff, 0xe0, 0xff, 0xff, 
+    0xff, 0xff, 0xe3, 0xf7, 0xff, 0x07, 0xff, 0xff, 0xff, 0xff, 0xf1, 0xff, 0xf0, 0x73, 0xfc, 0xff, 
+    0xff, 0xff, 0x00, 0x00, 0xe2, 0x73, 0xfc, 0xff, 0xff, 0xff, 0xff, 0x7f, 0xe0, 0x07, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0x6f, 0x00, 0x01, 0x70, 0xf0, 0xff, 0xff, 0xe3, 0x67, 0x00, 0x01, 0x30, 0xe0, 0xff, 
+    0xff, 0xc3, 0x63, 0xfc, 0xcf, 0x31, 0xfe, 0xff, 0xff, 0x03, 0x60, 0x80, 0xcf, 0x71, 0xe0, 0xff, 
+    0xff, 0x23, 0x64, 0xfc, 0xcf, 0xf1, 0xc7, 0xff, 0xff, 0x63, 0x66, 0x80, 0xcf, 0x31, 0xc0, 0xff, 
+    0xff, 0xe3, 0x67, 0x00, 0xcf, 0x31, 0xf0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+]
+LOGO_WIDTH = 64
+LOGO_HEIGHT = 32
+
 # Función para dibujar un bitmap en la pantalla OLED
 def draw_bitmap(oled, bitmap, x, y, w, h):
     """
-    Dibuja un bitmap en la pantalla OLED.
-    bitmap: lista o tupla de 0/1 con al menos w*h elementos (idealmente).
+    Dibuja un bitmap en la pantalla OLED en la posición especificada.
+
+    Parámetros:
+    - oled: Instancia del objeto OLED (por ejemplo, ssd1306.SSD1306_I2C).
+    - bitmap: Lista o bytearray con los datos del gráfico (formato MONO_HLSB).
+    - x: Posición horizontal (columna) donde se dibujará el gráfico.
+    - y: Posición vertical (fila) donde se dibujará el gráfico.
+    - w: Ancho del gráfico en píxeles.
+    - h: Alto del gráfico en píxeles.
     """
     buf = bytearray(bitmap)
     fb = framebuf.FrameBuffer(buf, w, h, framebuf.MONO_HLSB)
     oled.blit(fb, x, y)
 
-# Función para mostrar los datos
-def mostrar_datos(oled, temp, hum, pres, condicion, enviando=False, conectado=False, guardando=False):
+# Función para mostrar el logo de la empresa
+def mostrar_logo(oled):
     """
-    Muestra la información de sensores y el estado del sistema en una pantalla OLED.
+    Muestra el logotipo de la empresa centrado en la pantalla OLED.
+    Si el bitmap está vacío o no se carga, se muestra un texto alternativo.
 
     Parámetros:
-    - oled: Objeto de pantalla SSD1306.
-    - temp: Temperatura (float).
-    - hum: Humedad relativa (float).
-    - pres: Presión atmosférica (float).
-    - condicion: Clave de la condición climática para seleccionar el ícono correspondiente.
-    - enviando: Bool opcional. Indica si se están enviando datos (muestra ícono TX si True).
-    - conectado: Bool opcional. Indica si hay conexión WiFi (muestra ícono WiFi si True).
-    - guardando: Bool opcional. Indica si se están guardando datos en SD (muestra ícono SD si True).
+    - oled: Instancia del objeto OLED (por ejemplo, ssd1306.SSD1306_I2C).
+    """
+    oled.fill(0)
+    if LOGO_BITMAP:
+        x = (oled.width - LOGO_WIDTH) // 2
+        y = (oled.height - LOGO_HEIGHT) // 2
+        draw_bitmap(oled, LOGO_BITMAP, x, y, LOGO_WIDTH, LOGO_HEIGHT)
+    else:
+        # Placeholder de texto si no hay bitmap
+        text = "METIS INGENIERIA Y MANTENIMIENTO"
+        x = (oled.width - len(text)*8) // 2
+        y = (oled.height - 8) // 2
+        oled.text(text, x, y)
+    oled.show()
+
+# Función para mostrar los datos de sensores y estados
+def mostrar_datos(oled, temp, hum, pres, condicion,
+                  enviando=False, conectado=False, guardando=False):
+    """
+    Muestra los datos de sensores y los estados del sistema en pantalla OLED.
+
+    Parámetros:
+    - oled: Instancia del objeto OLED (por ejemplo, ssd1306.SSD1306_I2C).
+    - temp (float): Temperatura en grados Celsius.
+    - hum (float): Humedad relativa en porcentaje.
+    - pres (float): Presión atmosférica.
+    - condicion (str): Clave del diccionario `condiciones` para mostrar ícono climático.
+    - enviando (bool): Si es True, muestra ícono de transmisión (TX).
+    - conectado (bool): Si es True, muestra ícono de WiFi.
+    - guardando (bool): Si es True, muestra ícono de SD.
+
+    Maneja errores de forma segura si ocurre alguna excepción durante el dibujo.
     """
     try:
-        oled.fill(0)  # Limpiar pantalla
-
-        # Estados 
+        oled.fill(0)
+        # Íconos de estado
         icon_w, icon_h = 16, 8
         espacio = 4
         iconos = []
         if conectado: iconos.append(estados["wifi"])
         if enviando: iconos.append(estados["tx"])
         if guardando: iconos.append(estados["sd"])
-
-        # Calcular la posición de los íconos de estado
-        total_w = len(iconos) * icon_w + max(len(iconos)-1, 0) * espacio
-        estado_x = (oled.width - total_w) // 2
-        estado_y = 8 
-
-        # Dibujar los íconos de estado
-        for estado in iconos:
-            draw_bitmap(oled, estado, estado_x, estado_y, icon_w, icon_h)
+        total_w = len(iconos)*icon_w + max(len(iconos)-1,0)*espacio
+        estado_x = (oled.width - total_w)//2
+        estado_y = 0
+        for ico in iconos:
+            draw_bitmap(oled, ico, estado_x, estado_y, icon_w, icon_h)
             estado_x += icon_w + espacio
-
-        # Datos
-        icono = condiciones.get(condicion, condiciones["desconocido"])  # Usamos el ícono para la condición
-        icono_w, icono_h = 16, 16
-        datos_x = 40
-        block_y = 26 
-
-        # Icono
-        icono_x = 15
-        icono_y = block_y + 5
-        draw_bitmap(oled, icono, icono_x, icono_y, icono_w, icono_h)
-
-        # Dibujar los datos de temperatura, humedad y presión
-        oled.text(f"T: {temp:.1f}oC", datos_x, block_y)
-        oled.text(f"H: {hum:.1f}%", datos_x, block_y + 10)
-        oled.text(f"P: {pres:.1f}", datos_x, block_y + 20)
-
-        oled.show()  # Muestra todo lo dibujado en la pantalla
+        # Ícono de condición
+        icono = condiciones.get(condicion, condiciones["desconocido"])
+        draw_bitmap(oled, icono, 0, icon_h + 2, 16, 16)
+        # Datos de texto
+        txt_x = 20
+        oled.text(f"T:{temp:.1f}C", txt_x, icon_h + 2)
+        oled.text(f"H:{hum:.1f}%", txt_x, icon_h + 10)
+        oled.text(f"P:{pres:.1f}",  txt_x, icon_h + 18)
+        oled.show()
     except Exception as e:
         print("❌ Error en mostrar_datos:", e)
