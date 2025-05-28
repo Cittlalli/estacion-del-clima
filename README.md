@@ -11,9 +11,11 @@ Incluye sensores DHT11 y BMP280, conectividad Wi-Fi, comunicación en tiempo rea
 ```
 Estacion-del-clima/
 ├── ClimaAPP.ipynb              # Notebook para compilar la APK en Google Colab
+├── Bootloader.u2f              # Notebook para compilar la APK en Google Colab
 ├── Raspberry/                  # Código para la Raspberry Pi Pico W (MicroPython)
 │   ├── clima.py                # Lógica para determinar condiciones climáticas
 │   ├── comunicacion.py         # Manejo de Wi-Fi y WebSockets
+│   ├── wifi_config.json        # Redes Wi-Fi y configuración de IP estática
 │   ├── main.py                 # Programa principal que lee sensores y envía datos
 │   ├── sensors.py              # Clase para manejar los sensores DHT11 y BMP280
 │   ├── sd_logger.py            # Clases para manejar el modulo SD
@@ -26,6 +28,20 @@ Estacion-del-clima/
 │   ├── fonts/                  # Tipografías utilizadas
 │   └── img/                    # Imágenes según el clima
 ```
+---
+
+## 🪛 Pasos para instalar el bootloader:
+Conecta tu Pico en modo bootloader:
+1. Presiona y mantén presionado el botón BOOTSEL de tu Pico.
+2. Conéctala al puerto USB de tu computadora.
+3. Suelta el botón cuando aparezca una unidad nueva llamada RPI-RP2.
+4. Descarga `Bootloader.u2f`
+5. Arrastra el archivo a la unidad RPI-RP2.
+6. La Pico se reiniciará automáticamente y dejará de aparecer como unidad USB.
+
+Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts MicroPython.
+
+> ⚠️ Si usas Thonny, selecciona: Herramientas > Opciones > Intérprete y elige MicroPython (Raspberry Pi Pico) y el puerto correspondiente.
 
 ---
 
@@ -40,7 +56,7 @@ Estacion-del-clima/
    - `sd_logger.py`
    - `display.py`
 3. Instalar las librerias `sdcard` y `ssd1306` en la Raspberry
-> **Nota**: Asegúrate de configurar correctamente el SSID y la contraseña en `comunicacion.py`.
+> **Nota**: Asegúrate de configurar correctamente el SSID y la contraseña en `wifi_config.json`.
 
 ---
 
