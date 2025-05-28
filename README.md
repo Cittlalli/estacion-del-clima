@@ -2,7 +2,7 @@
 
 Este repositorio contiene una solución completa para monitorear condiciones climáticas usando una Raspberry Pi Pico W. Visualiza los datos desde una aplicación móvil construida con Kivy y en una pantalla OLED conectada a la Raspberry Pico. Escribe y lee la informacion de una tarjeta SD.
 
-Incluye sensores DHT11 y BMP280, conectividad Wi-Fi, comunicación en tiempo real mediante WebSockets, almacenamiento externo.
+Incluye el sensor BME280, conectividad Wi-Fi, comunicación en tiempo real mediante WebSockets, almacenamiento externo.
 
 ---
 
@@ -17,7 +17,7 @@ Estacion-del-clima/
 │   ├── comunicacion.py         # Manejo de Wi-Fi y WebSockets
 │   ├── wifi_config.json        # Redes Wi-Fi y configuración de IP estática
 │   ├── main.py                 # Programa principal que lee sensores y envía datos
-│   ├── sensors.py              # Clase para manejar los sensores DHT11 y BMP280
+│   ├── sensors.py              # Clase para manejar el sensor BME280
 │   ├── sd_logger.py            # Clases para manejar el modulo SD
 │   ├── display.py              # Repositorio de byte arrays de estado y
                                   condiciones. Funciones de la pantalla OLED.
