@@ -1,0 +1,22 @@
+{
+  // Lista de redes Wi-Fi. Puedes agregar más redes entre corchetes [] separadas por comas
+  "networks": [
+    {
+      "ssid": "TuRedWiFi1",          // Cambia esto por el nombre de tu red Wi-Fi
+      "password": "TuContraseña1"    // Contraseña de esa red
+    },
+    {
+      "ssid": "TuRedWiFi2",
+      "password": "TuContraseña2"
+    }
+  ],
+
+  // Configuración de IP fija (opcional)
+  // Si deseas usar DHCP, puedes dejar este bloque vacío o eliminarlo
+  "static": {
+    "ip": "192.168.1.50",           // IP que deseas asignar a la Raspberry
+    "subnet": "255.255.255.0",      // Máscara de subred
+    "gateway": "192.168.1.1",       // Puerta de enlace (gateway)
+    "dns": "8.8.8.8"                // Servidor DNS (puedes usar el de Google)
+  }
+}
