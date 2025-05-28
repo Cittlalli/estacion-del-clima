@@ -1,235 +1,361 @@
-import array
+from machine import I2C
 import time
-import utime
-import micropython
-from micropython import const
-from machine import Pin, I2C
 
-# ========================
-# Clases para sensores
-# ========================
+# ADDR
+BME280_I2CADDR = 0x76
 
-# --- Clase DHT11 ---
-class InvalidChecksum(Exception):
-    """Se lanza cuando el checksum del DHT11 no coincide"""
-    pass
+# Modos de Operación
+BME280_OSAMPLE_1 = 1
+BME280_OSAMPLE_2 = 2
+BME280_OSAMPLE_4 = 3
+BME280_OSAMPLE_8 = 4
+BME280_OSAMPLE_16 = 5
 
-class InvalidPulseCount(Exception):
-    """Se lanza cuando la cantidad de pulsos recibidos del DHT11 es incorrecta"""
-    pass
+# Registros
 
-# Constantes utilizadas en la lectura del sensor DHT11
-MAX_UNCHANGED = const(100)
-MIN_INTERVAL_US = const(200000)
-HIGH_LEVEL = const(50)
-EXPECTED_PULSES = const(84)
+BME280_REGISTER_DIG_T1 = 0x88 
+BME280_REGISTER_DIG_T2 = 0x8A
+BME280_REGISTER_DIG_T3 = 0x8C
 
-class DHT11:
+BME280_REGISTER_DIG_P1 = 0x8E
+BME280_REGISTER_DIG_P2 = 0x90
+BME280_REGISTER_DIG_P3 = 0x92
+BME280_REGISTER_DIG_P4 = 0x94
+BME280_REGISTER_DIG_P5 = 0x96
+BME280_REGISTER_DIG_P6 = 0x98
+BME280_REGISTER_DIG_P7 = 0x9A
+BME280_REGISTER_DIG_P8 = 0x9C
+BME280_REGISTER_DIG_P9 = 0x9E
+
+BME280_REGISTER_DIG_H1 = 0xA1
+BME280_REGISTER_DIG_H2 = 0xE1
+BME280_REGISTER_DIG_H3 = 0xE3
+BME280_REGISTER_DIG_H4 = 0xE4
+BME280_REGISTER_DIG_H5 = 0xE5
+BME280_REGISTER_DIG_H6 = 0xE6
+BME280_REGISTER_DIG_H7 = 0xE7
+
+BME280_REGISTER_CHIPID = 0xD0
+BME280_REGISTER_VERSION = 0xD1
+BME280_REGISTER_SOFTRESET = 0xE0
+
+BME280_REGISTER_CONTROL_HUM = 0xF2
+BME280_REGISTER_CONTROL = 0xF4
+BME280_REGISTER_CONFIG = 0xF5
+BME280_REGISTER_PRESSURE_DATA = 0xF7
+BME280_REGISTER_TEMP_DATA = 0xFA
+BME280_REGISTER_HUMIDITY_DATA = 0xFD
+
+class Device:
     """
-    Clase para interactuar con el sensor de temperatura y humedad DHT11.
+    Clase auxiliar para manejar la comunicación con un dispositivo I2C.
+
+    Esta clase proporciona métodos para leer y escribir valores de 8 y 16 bits,
+    así como leer valores con signo o sin signo, y controlar la endianness.
+
+    Args:
+        i2c (I2C): Objeto I2C de MicroPython.
+        address (int): Dirección del dispositivo en el bus I2C.
     """
-    _temperature: float
-    _humidity: float
-
-    def __init__(self, pin):
+    def __init__(self, i2c, address):
         """
-        Inicializa el sensor DHT11.
-
-        :param pin: Pin GPIO usado para la comunicación.
-        """
-        self._pin = pin
-        self._last_measure = utime.ticks_us()
-        self._temperature = -1
-        self._humidity = -1
-
-    def measure(self):
-        """
-        Realiza una nueva medición si ha pasado el tiempo mínimo requerido.
-        """
-        current_ticks = utime.ticks_us()
-        if utime.ticks_diff(current_ticks, self._last_measure) < MIN_INTERVAL_US and (
-            self._temperature > -1 or self._humidity > -1
-        ):
-            return  # No realiza medición si ya hay una reciente
-
-        self._send_init_signal()  # Envía la señal de inicio
-        pulses = self._capture_pulses()  # Captura los pulsos del sensor
-        buffer = self._convert_pulses_to_buffer(pulses)  # Convierte pulsos en datos
-        self._verify_checksum(buffer)  # Verifica integridad
-
-        # Extrae temperatura y humedad
-        self._humidity = buffer[0] + buffer[1] / 10
-        self._temperature = buffer[2] + buffer[3] / 10
-        self._last_measure = utime.ticks_us()
-
-    @property
-    def humidity(self):
-        """Devuelve la humedad medida en %"""
-        self.measure()
-        return self._humidity
-
-    @property
-    def temperature(self):
-        """Devuelve la temperatura medida en °C"""
-        self.measure()
-        return self._temperature
-
-    def _send_init_signal(self):
-        """Envía la señal de inicio al sensor DHT11"""
-        self._pin.init(Pin.OUT, Pin.PULL_DOWN)
-        self._pin.value(1)
-        utime.sleep_ms(50)
-        self._pin.value(0)
-        utime.sleep_ms(18)
-
-    @micropython.native
-    def _capture_pulses(self):
-        """
-        Captura los pulsos enviados por el sensor.
-        :return: Lista de duraciones de pulsos
-        """
-        pin = self._pin
-        pin.init(Pin.IN, Pin.PULL_UP)
-
-        val = 1
-        idx = 0
-        transitions = bytearray(EXPECTED_PULSES)
-        unchanged = 0
-        timestamp = utime.ticks_us()
-
-        while unchanged < MAX_UNCHANGED:
-            if val != pin.value():
-                if idx >= EXPECTED_PULSES:
-                    raise InvalidPulseCount("Got more than {} pulses".format(EXPECTED_PULSES))
-                now = utime.ticks_us()
-                transitions[idx] = now - timestamp
-                timestamp = now
-                idx += 1
-
-                val = 1 - val
-                unchanged = 0
-            else:
-                unchanged += 1
-        pin.init(Pin.OUT, Pin.PULL_DOWN)
-        if idx != EXPECTED_PULSES:
-            raise InvalidPulseCount("Expected {} but got {} pulses".format(EXPECTED_PULSES, idx))
-        return transitions[4:] # Omitimos los 4 primeros pulsos de sincronización
-
-    def _convert_pulses_to_buffer(self, pulses):
-        """Convierte los pulsos en una lista de bytes"""
-        binary = 0
-        for idx in range(0, len(pulses), 2):
-            binary = (binary << 1) | int(pulses[idx] > HIGH_LEVEL)
-        buffer = array.array("B")
-        for shift in range(4, -1, -1):
-            buffer.append((binary >> (shift * 8)) & 0xFF)
-        return buffer
-
-    def _verify_checksum(self, buffer):
-        """Verifica que el checksum sea válido"""
-        checksum = sum(buffer[0:4]) & 0xFF
-        if checksum != buffer[4]:
-            raise InvalidChecksum()
-
-# --- Clase BMP280 ---
-
-# Constantes de registro para BMP280
-REG_CONFIG = 0xF5
-REG_CTRL_MEAS = 0xF4
-REG_PRESSURE_MSB = 0xF7
-REG_TEMP_MSB = 0xFA
-REG_DIG_START = 0x88
-NUM_CALIB_PARAMS = 24
-
-class BMP280:
-    """
-    Clase para interactuar con el sensor BMP280.
-    Permite leer temperatura y presión barométrica.
-    """
-
-    def __init__(self, i2c, address=0x76):
-        """
-        Inicializa el sensor BMP280.
-
-        :param i2c: Objeto I2C.
-        :param address: Dirección I2C del sensor (por defecto 0x76).
+            Crea la instancia I2C de un dispositivo en una ADDR especificada
         """
         self.i2c = i2c
         self.address = address
         self.calib_params = {}
+
+    def writeRaw8(self, value):
+        """
+        Escribe un valor de 8 bits directamente en el bus I2C (sin usar un registro).
+        """
+        value = value & 0xFF
+        self._i2c.writeto(self._address, value)
+
+    def write8(self, register, value):
+        """
+        Escribe un valor de 8 bits en un registro específico del dispositivo.
+        """        
+        b=bytearray(1)
+        b[0]=value & 0xFF
+        self._i2c.writeto_mem(self._address, register, b)
+
+    def write16(self, register, value):
+        """
+        Escribe un valor de 16 bits en un registro específico del dispositivo.
+        """
+        value = value & 0xFFFF
+        b=bytearray(2)
+        b[0]= value & 0xFF
+        b[1]= (value>>8) & 0xFF
+        self.i2c.writeto_mem(self._address, register, value)
+
+    def readRaw8(self):
+        """
+        Lee un valor de 8 bits directamente del bus I2C (sin usar un registro).
+        """
+        return int.from_bytes(self._i2c.readfrom(self._address, 1),'little') & 0xFF
+
+    def readU8(self, register):
+        """
+        Lee un byte sin signo desde un registro del dispositivo.
+        """
+        return int.from_bytes(
+            self._i2c.readfrom_mem(self._address, register, 1),'little') & 0xFF
+
+    def readS8(self, register):
+        """
+        Lee un byte con signo desde un registro del dispositivo.
+        """        
+        result = self.readU8(register)
+        if result > 127:
+            result -= 256
+        return result
+
+    def readU16(self, register, little_endian=True):
+        """Read an unsigned 16-bit value from the specified register, with the
+        specified endianness (default little endian, or least significant byte
+        first)."""
+        result = int.from_bytes(
+            self._i2c.readfrom_mem(self._address, register, 2),'little') & 0xFFFF
+        if not little_endian:
+            result = ((result << 8) & 0xFF00) + (result >> 8)
+        return result
+
+    def readS16(self, register, little_endian=True):
+        """Read a signed 16-bit value from the specified register, with the
+        specified endianness (default little endian, or least significant byte
+        first)."""
+        result = self.readU16(register, little_endian)
+        if result > 32767:
+            result -= 65536
+        return result
+
+    def readU16LE(self, register):
+        """Read an unsigned 16-bit value from the specified register, in little
+        endian byte order."""
+        return self.readU16(register, little_endian=True)
+
+    def readU16BE(self, register):
+        """Read an unsigned 16-bit value from the specified register, in big
+        endian byte order."""
+        return self.readU16(register, little_endian=False)
+
+    def readS16LE(self, register):
+        """Read a signed 16-bit value from the specified register, in little
+        endian byte order."""
+        return self.readS16(register, little_endian=True)
+
+    def readS16BE(self, register):
+        """Read a signed 16-bit value from the specified register, in big
+        endian byte order."""
+        return self.readS16(register, little_endian=False)
+
+
+class BME280:
+    """
+    Clase para controlar el sensor BME280 mediante I2C.
+
+    Soporta la lectura de temperatura, presión y humedad con compensación
+    usando los parámetros de calibración del sensor.
+
+    Args:
+        mode (int): Modo de sobremuestreo. Valores válidos: 1 a 5.
+        address (int): Dirección I2C del sensor. Por defecto 0x76.
+        i2c (I2C): Objeto I2C de MicroPython.
+    """
+    def __init__(self, mode=BME280_OSAMPLE_1, address=BME280_I2CADDR, i2c=None,
+                **kwargs):
+        # Verifica el modo
+        if mode not in [BME280_OSAMPLE_1, BME280_OSAMPLE_2, BME280_OSAMPLE_4,
+                        BME280_OSAMPLE_8, BME280_OSAMPLE_16]:
+            raise ValueError(
+                'Unexpected mode value {0}. Set mode to one of '
+                'BME280_ULTRALOWPOWER, BME280_STANDARD, BME280_HIGHRES, or '
+                'BME280_ULTRAHIGHRES'.format(mode))
+        self._mode = mode
+        # Crea dispositivo I2C
+        if i2c is None:
+            raise ValueError('An I2C object is required.')
+        self._device = Device(address, i2c)
+        # Carga valores de calibracion 
         self._load_calibration()
-        self._initialize_sensor()
+        self._device.write8(BME280_REGISTER_CONTROL, 0x3F)
+        self.t_fine = 0
 
     def _load_calibration(self):
-        """Lee y almacena los parámetros de calibración del sensor"""
-        data = list(self.i2c.readfrom_mem(self.address, REG_DIG_START, NUM_CALIB_PARAMS))
-        self.calib_params = {
-            # Parámetros de calibración según datasheet
-            "dig_t1": data[1] << 8 | data[0],
-            "dig_t2": (data[3] << 8 | data[2]) - 0x10000 if data[3] & 0x80 else data[3] << 8 | data[2],
-            "dig_t3": (data[5] << 8 | data[4]) - 0x10000 if data[5] & 0x80 else data[5] << 8 | data[4],
-            "dig_p1": data[7] << 8 | data[6],
-            "dig_p2": (data[9] << 8 | data[8]) - 0x10000 if data[9] & 0x80 else data[9] << 8 | data[8],
-            "dig_p3": (data[11] << 8 | data[10]) - 0x10000 if data[11] & 0x80 else data[11] << 8 | data[10],
-            "dig_p4": (data[13] << 8 | data[12]) - 0x10000 if data[13] & 0x80 else data[13] << 8 | data[12],
-            "dig_p5": (data[15] << 8 | data[14]) - 0x10000 if data[15] & 0x80 else data[15] << 8 | data[14],
-            "dig_p6": (data[17] << 8 | data[16]) - 0x10000 if data[17] & 0x80 else data[17] << 8 | data[16],
-            "dig_p7": (data[19] << 8 | data[18]) - 0x10000 if data[19] & 0x80 else data[19] << 8 | data[18],
-            "dig_p8": (data[21] << 8 | data[20]) - 0x10000 if data[21] & 0x80 else data[21] << 8 | data[20],
-            "dig_p9": (data[23] << 8 | data[22]) - 0x10000 if data[23] & 0x80 else data[23] << 8 | data[22]
-        }
-
-    def _initialize_sensor(self):
-        """Configura el sensor con los parámetros necesarios para medición"""
-        self.i2c.writeto_mem(self.address, REG_CONFIG, bytes([(0x04 << 5) | (0x05 << 2)]))
-        self.i2c.writeto_mem(self.address, REG_CTRL_MEAS, bytes([(0x01 << 5) | (0x03 << 2) | 0x03]))
-        time.sleep(0.1)
-
-    def read_raw_data(self):
         """
-        Lee los valores crudos de temperatura y presión desde el sensor.
-
-        :return: Tuple (raw_temp, raw_pressure)
+        Carga los parámetros de calibración desde los registros internos del BME280.
+        Esta información es necesaria para compensar las mediciones crudas.
         """
-        data = list(self.i2c.readfrom_mem(self.address, REG_PRESSURE_MSB, 6))
-        raw_pressure = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
-        raw_temp = (data[3] << 12) | (data[4] << 4) | (data[5] >> 4)
-        return raw_temp, raw_pressure
+        self.dig_T1 = self._device.readU16LE(BME280_REGISTER_DIG_T1)
+        self.dig_T2 = self._device.readS16LE(BME280_REGISTER_DIG_T2)
+        self.dig_T3 = self._device.readS16LE(BME280_REGISTER_DIG_T3)
 
-    def convert_temp(self, raw_temp):
-        """
-        Convierte la temperatura cruda a grados Celsius (×100).
+        self.dig_P1 = self._device.readU16LE(BME280_REGISTER_DIG_P1)
+        self.dig_P2 = self._device.readS16LE(BME280_REGISTER_DIG_P2)
+        self.dig_P3 = self._device.readS16LE(BME280_REGISTER_DIG_P3)
+        self.dig_P4 = self._device.readS16LE(BME280_REGISTER_DIG_P4)
+        self.dig_P5 = self._device.readS16LE(BME280_REGISTER_DIG_P5)
+        self.dig_P6 = self._device.readS16LE(BME280_REGISTER_DIG_P6)
+        self.dig_P7 = self._device.readS16LE(BME280_REGISTER_DIG_P7)
+        self.dig_P8 = self._device.readS16LE(BME280_REGISTER_DIG_P8)
+        self.dig_P9 = self._device.readS16LE(BME280_REGISTER_DIG_P9)
 
-        :param raw_temp: Valor crudo de temperatura.
-        :return: Temperatura en °C ×100.
-        """
-        params = self.calib_params
-        var1 = (((raw_temp >> 3) - (params["dig_t1"] << 1)) * params["dig_t2"]) >> 11
-        var2 = (((((raw_temp >> 4) - params["dig_t1"]) * ((raw_temp >> 4) - params["dig_t1"])) >> 12) * params["dig_t3"]) >> 14
-        t_fine = var1 + var2
-        return (t_fine * 5 + 128) >> 8
+        self.dig_H1 = self._device.readU8(BME280_REGISTER_DIG_H1)
+        self.dig_H2 = self._device.readS16LE(BME280_REGISTER_DIG_H2)
+        self.dig_H3 = self._device.readU8(BME280_REGISTER_DIG_H3)
+        self.dig_H6 = self._device.readS8(BME280_REGISTER_DIG_H7)
 
-    def convert_pressure(self, raw_pressure, raw_temp):
-        """
-        Convierte la presión cruda a presión atmosférica en hPa.
+        h4 = self._device.readS8(BME280_REGISTER_DIG_H4)
+        h4 = (h4 << 24) >> 20
+        self.dig_H4 = h4 | (self._device.readU8(BME280_REGISTER_DIG_H5) & 0x0F)
 
-        :param raw_pressure: Valor crudo de presión.
-        :param raw_temp: Valor crudo de temperatura (requerido para compensación).
-        :return: Presión en hPa.
+        h5 = self._device.readS8(BME280_REGISTER_DIG_H6)
+        h5 = (h5 << 24) >> 20
+        self.dig_H5 = h5 | (
+            self._device.readU8(BME280_REGISTER_DIG_H5) >> 4 & 0x0F)
+
+    def read_raw_temp(self):
         """
-        params = self.calib_params
-        t_fine = self.convert_temp(raw_temp)
-        var1 = ((t_fine >> 1) - 64000)
-        var2 = (((var1 >> 2) * (var1 >> 2)) >> 11) * params["dig_p6"]
-        var2 += ((var1 * params["dig_p5"]) << 1)
-        var2 = (var2 >> 2) + (params["dig_p4"] << 16)
-        var1 = (((params["dig_p3"] * ((var1 >> 2) * (var1 >> 2)) >> 13) >> 3) + ((params["dig_p2"] * var1) >> 1)) >> 18
-        var1 = ((32768 + var1) * params["dig_p1"]) >> 15
+            Lee la temperatura cruda (no compensada) desde el sensor.
+
+            Returns:
+                int: Valor ADC crudo de temperatura.
+        """        
+        meas = self._mode
+        self._device.write8(BME280_REGISTER_CONTROL_HUM, meas)
+        meas = self._mode << 5 | self._mode << 2 | 1
+        self._device.write8(BME280_REGISTER_CONTROL, meas)
+        sleep_time = 1250 + 2300 * (1 << self._mode)
+
+        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
+        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
+        time.sleep_us(sleep_time) 
+        msb = self._device.readU8(BME280_REGISTER_TEMP_DATA)
+        lsb = self._device.readU8(BME280_REGISTER_TEMP_DATA + 1)
+        xlsb = self._device.readU8(BME280_REGISTER_TEMP_DATA + 2)
+        raw = ((msb << 16) | (lsb << 8) | xlsb) >> 4
+        return raw
+
+    def read_raw_pressure(self):
+        """
+        Lee la presión cruda (no compensada) desde el sensor.
+        Requiere haber leído la temperatura primero.
+
+        Returns:
+            int: Valor ADC crudo de presión.
+        """
+        msb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA)
+        lsb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA + 1)
+        xlsb = self._device.readU8(BME280_REGISTER_PRESSURE_DATA + 2)
+        raw = ((msb << 16) | (lsb << 8) | xlsb) >> 4
+        return raw
+
+    def read_raw_humidity(self):
+        """
+        Lee la humedad cruda (no compensada) desde el sensor.
+        Requiere haber leído la temperatura primero.
+
+        Returns:
+            int: Valor ADC crudo de humedad.
+        """
+        msb = self._device.readU8(BME280_REGISTER_HUMIDITY_DATA)
+        lsb = self._device.readU8(BME280_REGISTER_HUMIDITY_DATA + 1)
+        raw = (msb << 8) | lsb
+        return raw
+
+    def read_temperature(self):
+        """
+        Calcula la temperatura compensada en centésimas de grado Celsius.
+
+        Returns:
+            int: Temperatura en centésimas de grado Celsius (por ejemplo, 2500 = 25.00°C).
+        """
+        adc = self.read_raw_temp()
+        var1 = ((adc >> 3) - (self.dig_T1 << 1)) * (self.dig_T2 >> 11)
+        var2 = ((
+            (((adc >> 4) - self.dig_T1) * ((adc >> 4) - self.dig_T1)) >> 12) *
+            self.dig_T3) >> 14
+        self.t_fine = var1 + var2
+        return (self.t_fine * 5 + 128) >> 8
+
+    def read_pressure(self):
+        """
+        Calcula la presión compensada en Pascales.
+
+        Returns:
+            int: Presión en Pa.
+        """
+        adc = self.read_raw_pressure()
+        var1 = self.t_fine - 128000
+        var2 = var1 * var1 * self.dig_P6
+        var2 = var2 + ((var1 * self.dig_P5) << 17)
+        var2 = var2 + (self.dig_P4 << 35)
+        var1 = (((var1 * var1 * self.dig_P3) >> 8) +
+                ((var1 * self.dig_P2) >> 12))
+        var1 = (((1 << 47) + var1) * self.dig_P1) >> 33
         if var1 == 0:
             return 0
-        p = ((1048576 - raw_pressure) - (var2 >> 12)) * 3125
-        p = (p // var1) * 2
-        var1 = (params["dig_p9"] * ((p >> 3) * (p >> 3)) >> 13) >> 12
-        var2 = ((p >> 2) * params["dig_p8"]) >> 13
-        p += (var1 + var2 + params["dig_p7"]) >> 4
-        return p / 100.0
+        p = 1048576 - adc
+        p = (((p << 31) - var2) * 3125) // var1
+        var1 = (self.dig_P9 * (p >> 13) * (p >> 13)) >> 25
+        var2 = (self.dig_P8 * p) >> 19
+        return ((p + var1 + var2) >> 8) + (self.dig_P7 << 4)
+
+    def read_humidity(self):
+        """
+        Calcula la humedad relativa compensada.
+
+        Returns:
+            int: Humedad en milésimas de porcentaje (por ejemplo, 48000 = 48.00%).
+        """
+        adc = self.read_raw_humidity()
+        h = self.t_fine - 76800
+        h = (((((adc << 14) - (self.dig_H4 << 20) - (self.dig_H5 * h)) +
+            16384) >> 15) * (((((((h * self.dig_H6) >> 10) * (((h *
+                            self.dig_H3) >> 11) + 32768)) >> 10) + 2097152) *
+                            self.dig_H2 + 8192) >> 14))
+        h = h - (((((h >> 15) * (h >> 15)) >> 7) * self.dig_H1) >> 4)
+        h = 0 if h < 0 else h
+        h = 419430400 if h > 419430400 else h
+        return h >> 12
+
+    @property
+    def temperature(self):
+        """
+        Devuelve la temperatura en grados Celsius como cadena formateada.
+
+        Returns:
+            str: Temperatura (por ejemplo, '24.13C').
+        """       
+        t = self.read_temperature()
+        ti = t // 100
+        td = t - ti * 100
+        return "{}.{:02d}C".format(ti, td)
+
+    @property
+    def pressure(self):
+        """
+        Devuelve la presión en hPa como cadena formateada.
+
+        Returns:
+            str: Presión (por ejemplo, '1013.25hPa').
+        """
+        p = self.read_pressure() // 256
+        pi = p // 100
+        pd = p - pi * 100
+        return "{}.{:02d}hPa".format(pi, pd)
+
+    @property
+    def humidity(self):
+        """
+        Devuelve la humedad relativa en porcentaje como cadena formateada.
+
+        Returns:
+            str: Humedad (por ejemplo, '48.32%').
+        """
+        h = self.read_humidity()
+        hi = h // 1024
+        hd = h * 100 // 1024 - hi * 100
+        return "{}.{:02d}%".format(hi, hd)
