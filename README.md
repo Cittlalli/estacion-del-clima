@@ -70,7 +70,7 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
      ```bash
      pip install kivy
      ```
-   -  Kivy-Garden desde la terminal:
+   -  Kivy-Garden:
        ```bash
        python -m pip install https://github.com/kivy-garden/matplotlib/archive/master.zip
        ```
