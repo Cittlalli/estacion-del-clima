@@ -100,10 +100,9 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
    - Carpeta `fonts/`
    - Carpeta `img/`
 3. Realizar los pasos del notebook para compilar la aplicación con Buildozer.
-4. Al finalizar la compilación, la APK se guardará en:  
-   `/content/bin/`
+4. Al finalizar la compilación, la APK se guardará en: `/content/bin/`
 5. Descarga el archivo `.apk` generado para instalarlo en tu dispositivo Android.
-> Si deseas aplicar tus propias especificaciones omite `buildozer.spec`, cuando se cree en la notebook llenalo con tus especifiaciones deseadas
+> Si deseas aplicar tus propias especificaciones omite `buildozer.spec`, cuando se cree en la notebook llenalo con tus especifiaciones deseadas.
 ---
 ## 🔌 Conexiones del Circuito
 
