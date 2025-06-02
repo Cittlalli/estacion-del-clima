@@ -108,6 +108,37 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 5. Descarga el archivo `.apk` generado para instalarlo en tu dispositivo Android.
 
 ---
+## 🔌 Conexiones del Circuito
+
+Para replicar correctamente el circuito, es importante seguir las conexiones indicadas en la siguiente tabla. 
+Cada componente debe conectarse al pin GPIO correspondiente de la Raspberry Pi Pico. 
+La tabla incluye tanto el número de GPIO como el número de pin físico. 
+*Asegúrate de revisar dos veces cada conexión antes de alimentar el sistema.*
+
+### 📋 Tabla de conexiones
+
+| Componente   | Señal | GPIO (RPi Pico) | Pin físico |
+|--------------|-------|-----------------|------------|
+| OLED         | SCL   | GPIO 3          | Pin 5      |
+| OLED         | SDA   | GPIO 2          | Pin 4      |
+| BME280       | SCL   | GPIO 27         | Pin 32     |
+| BME280       | SDA   | GPIO 26         | Pin 31     |
+| SD Card      | MISO  | GPIO 16         | Pin 21     |
+| SD Card      | CS    | GPIO 17         | Pin 22     |
+| SD Card      | SCK   | GPIO 18         | Pin 24     |
+| SD Card      | MOSI  | GPIO 19         | Pin 25     |
+
+> 💡 **Importante**: Las conexiones deben realizarse con precisión según esta tabla para garantizar el funcionamiento del sistema. Se recomienda utilizar cables de colores y etiquetas para evitar errores durante el montaje.
+
+### 🖼️ Referencia visual
+
+Para facilitar el ensamblaje, también puedes guiarte por los siguientes diagramas del circuito:
+
+![Conexiones](images/Conexiones.png)
+
+![Conexion 2](images/Conexion%202.jpg)
+
+---
 
 ## 🚀 Características
 
