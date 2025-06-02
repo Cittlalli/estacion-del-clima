@@ -95,7 +95,7 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 1. Descarga y abre el archivo [`ClimaAPP.ipynb`](ClimaAPP.ipynb) en [Google Colab](https://colab.research.google.com/).
 2. Subir los siguientes archivos desde la carpeta `/App` al directorio `/content` de Colab:
    - `main.py`
-   - `buildozer.spec`
+   - `buildozer.spec` (opcional)
    - `logo.png`
    - Carpeta `fonts/`
    - Carpeta `img/`
@@ -105,7 +105,7 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
    /content/bin/
    ```
 5. Descarga el archivo `.apk` generado para instalarlo en tu dispositivo Android.
-
+> Si deseas aplicar tus propias especificaciones omite `buildozer.spec`, cuando se cree en la notebook llenalo con tus especifiaciones deseadas
 ---
 ## 🔌 Conexiones del Circuito
 
