@@ -45,9 +45,9 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 
 ---
 
-## 📡 Ejecutar la carpeta `Raspberry`
+## 📡 Ejecutar la carpeta `Raspberry` 
 
-1. Tener MicroPython para RP2040 instalado.
+1. Tener MicroPython para RP2040 instalado. (Categoria anterior)
 2. Abrir los archivos desde la carpeta `/Raspberry`, cargarlos y guardarlos:
    - `main.py`
    - `sensors.py`
