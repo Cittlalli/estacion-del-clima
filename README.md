@@ -62,11 +62,29 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 
 ## 📱 Ejecutar la carpeta `App`
 
-1. Instalar Kivy:
-   ```bash
-   pip install kivy
-   ```
-2. Ejecutar el archivo:
+1. Abre VS Code Studio [En caso de no tenerlo intalado puedes hacerlo desde este link](https://code.visualstudio.com/download)
+2. Abre el proyecto `main.py` de la carpeta `/App`en VS Code.
+3. Abre el terminal (puedes usar Ctrl + ñ o ir a Ver > Terminal).
+4. Ejecuta los siguientes comandos pip install :
+   - Kivy:
+     ```bash
+     pip install kivy
+     python -m pip install https://github.com/kivy-garden/matplotlib/archive/master.zip
+     ```
+   -  Kivy-Garden desde la terminal:
+     ```bash
+     python -m pip install https://github.com/kivy-garden/matplotlib/archive/master.zip
+     ```
+   - websockets
+     ```bash
+     pip install websockets
+     ```
+   - matplotlib
+     ```bash
+     pip install matplotlib
+     ```
+   > Asegúrate de que estás usando el entorno Python correcto (revisa abajo a la izquierda en VS Code el intérprete Python activo).
+4. Ejecutar el archivo:
    ```bash
    python main.py
    ```
@@ -75,14 +93,14 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 
 ## ☁️ Compilar la APK en Google Colab
 
-1. Abrir el archivo [`ClimaAPP.ipynb`](ClimaAPP.ipynb) en Google Colab.
-2. Realizar los pasos del notebook para compilar la aplicación con Buildozer.
-3. Subir los siguientes archivos desde la carpeta `/App` al directorio `/content` de Colab:
+1. Descarga y abre el archivo [`ClimaAPP.ipynb`](ClimaAPP.ipynb) en [Google Colab](https://colab.research.google.com/).
+2. Subir los siguientes archivos desde la carpeta `/App` al directorio `/content` de Colab:
    - `main.py`
    - `buildozer.spec`
    - `logo.png`
    - Carpeta `fonts/`
    - Carpeta `img/`
+3. Realizar los pasos del notebook para compilar la aplicación con Buildozer.
 4. Al finalizar la compilación, la APK se guardará en:  
    ```
    /content/bin/
