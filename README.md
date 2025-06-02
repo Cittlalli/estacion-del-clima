@@ -141,9 +141,9 @@ Para replicar correctamente el circuito, es importante seguir las conexiones ind
 
 Para facilitar el ensamblaje, también puedes guiarte por los siguientes diagramas del circuito:
 
-![Conexiones](images/Conexiones.png)
+![Conexiones](Conexiones.png)
 
-![Conexion 2](images/Conexion%202.jpg)
+![Conexion 2](Conexion2.jpg)
 
 ---
 
