@@ -71,9 +71,9 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
      pip install kivy
      ```
    -  Kivy-Garden desde la terminal:
-     ```bash
-     python -m pip install https://github.com/kivy-garden/matplotlib/archive/master.zip
-     ```
+       ```bash
+       python -m pip install https://github.com/kivy-garden/matplotlib/archive/master.zip
+       ```
    - websockets
      ```bash
      pip install websockets
