@@ -11,7 +11,7 @@ Incluye el sensor BME280, conectividad Wi-Fi, comunicación en tiempo real media
 ```
 Estacion-del-clima/
 ├── ClimaAPP.ipynb              # Notebook para compilar la APK en Google Colab
-├── Bootloader.u2f              # Notebook para compilar la APK en Google Colab
+├── Bootloader.u2f              # Bootloader utilizado en la Raspberry para el proyecto
 ├── Raspberry/                  # Código para la Raspberry Pi Pico W (MicroPython)
 │   ├── clima.py                # Lógica para determinar condiciones climáticas
 │   ├── comunicacion.py         # Manejo de Wi-Fi y WebSockets
