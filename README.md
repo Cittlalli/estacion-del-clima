@@ -32,7 +32,7 @@ Estacion-del-clima/
 
 ## 🪛 Pasos para instalar el bootloader:
 Conecta tu Pico en modo bootloader:
-1. Presiona y mantén presionado el botón BOOTSEL de tu Pico.
+1. Mantén presionado el botón BOOTSEL de tu Pico.
 2. Conéctala al puerto USB de tu computadora.
 3. Suelta el botón cuando aparezca una unidad nueva llamada RPI-RP2.
 4. Descarga `Bootloader.u2f`
