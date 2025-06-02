@@ -62,7 +62,7 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 
 ## 📱 Ejecutar la carpeta `App`
 
-1. Abre VS Code Studio [En caso de no tenerlo intalado puedes hacerlo desde este link](https://code.visualstudio.com/download)
+1. Abre VS Code Studio. [En caso de no tenerlo instalado puedes hacerlo desde este link](https://code.visualstudio.com/download).
 2. Abre el proyecto `main.py` de la carpeta `/App`en VS Code.
 3. Abre el terminal (puedes usar Ctrl + ñ o ir a Ver > Terminal).
 4. Ejecuta los siguientes comandos pip install :
