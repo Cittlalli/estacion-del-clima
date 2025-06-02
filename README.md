@@ -19,8 +19,8 @@ Estacion-del-clima/
 │   ├── main.py                 # Programa principal que lee sensores y envía datos
 │   ├── sensors.py              # Clase para manejar el sensor BME280
 │   ├── sd_logger.py            # Clases para manejar el modulo SD
-│   ├── display.py              # Repositorio de byte arrays de estado y
-                                  condiciones. Funciones de la pantalla OLED.
+│   ├── display.py              # Repositorio de byte arrays de estado, condiciones y
+                                  logo de la empresa. Funciones de la pantalla OLED.
 ├── App/                        # Aplicación móvil con Kivy (Python)
 │   ├── main.py                 # Interfaz gráfica y recepción de datos
 │   ├── buildozer.spec          # Configuración para compilar APK
