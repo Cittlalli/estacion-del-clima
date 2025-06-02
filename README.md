@@ -103,18 +103,18 @@ Ya puedes conectarte con un editor como Thonny y empezar a cargar tus scripts Mi
 4. Al finalizar la compilación, la APK se guardará en: `/content/bin/`
 5. Descarga el archivo `.apk` generado para instalarlo en tu dispositivo Android.
 
-### ⚙️ Personalización del archivo buildozer.spec
-Si deseas aplicar tus propias especificaciones al compilar la aplicación, puedes ignorar el archivo buildozer.spec incluido. Cuando ejecutes Buildozer por primera vez en tu notebook, se generará un archivo nuevo automáticamente. Ahí podrás modificarlo según tus necesidades.
+### ⚙️ Personalización del archivo `buildozer.spec`
+Si deseas aplicar tus propias especificaciones al compilar la aplicación, puedes ignorar el archivo `buildozer.spec` incluido. Cuando ejecutes Buildozer por primera vez en tu notebook, se generará un archivo nuevo automáticamente. Ahí podrás modificarlo según tus necesidades.
 
 Ten en cuenta las siguientes configuraciones esenciales al personalizarlo:
-  - source.include_patterns = img/*.png,fonts/*.ttf
+  - `source.include_patterns = img/*.png,fonts/*.ttf`
   Esta línea asegura que las imágenes (ubicadas en img/) y las fuentes personalizadas (ubicadas en fonts/) se incluyan en la APK final. Sin esto, la app podría no mostrar correctamente elementos gráficos o texto con fuentes especiales.
-  - requirements = python3,kivy,websockets
+  - `requirements = python3,kivy,websockets`
   Esta es la lista mínima de dependencias necesarias para que la aplicación funcione. Si omites alguno de estos módulos, la compilación fallará o la app no correrá correctamente.
-  - android.permissions = android.permission.INTERNET
+  - `android.permissions = android.permission.INTERNET`
   Este permiso es necesario si tu aplicación necesita acceso a Internet, por ejemplo, para comunicación por websockets u otras operaciones en red.
 
-> ⚠️ Recomendación: Asegúrate de revisar y ajustar el archivo buildozer.spec cuidadosamente antes de compilar, especialmente si estás agregando nuevas funcionalidades o recursos.
+> ⚠️ Recomendación: Asegúrate de revisar y ajustar el archivo `buildozer.spec` cuidadosamente antes de compilar, especialmente si estás agregando nuevas funcionalidades o recursos.
 
 ---
 ## 🔌 Conexiones del Circuito
